@@ -148,7 +148,17 @@ fn init_db(conn: &Connection) -> rusqlite::Result<()> {
 type Db = Arc<Mutex<Connection>>;
 
 fn open_db() -> Db {
-    let path = std::env::var("DATABASE_URL").unwrap_or_else(|_| "/app/diesellynk.db".to_string());
+    // Railway: set DATABASE_URL to a persistent volume path
+    // Default: /app/diesellynk.db (works if Railway volume mounted)
+    // Fallback: /tmp/diesellynk.db (ephemeral — survives restarts but not redeploys)
+    let path = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        // Try /app first, fall back to /tmp
+        if std::path::Path::new("/app").exists() {
+            "/app/diesellynk.db".to_string()
+        } else {
+            "/tmp/diesellynk.db".to_string()
+        }
+    });
     let conn = Connection::open(&path).expect("Failed to open SQLite database");
     init_db(&conn).expect("Failed to initialize database schema");
     println!("[DB] SQLite opened at {}", path);

@@ -170,6 +170,7 @@
     <div class="stat-card warn"><div class="stat-label">Service Requests</div><div class="stat-value" id="stat-requests">—</div></div>
     <div class="stat-card green"><div class="stat-label">Nexiq Connected</div><div class="stat-value" id="stat-nexiq">—</div></div>
     <div class="stat-card blue"><div class="stat-label">Total History</div><div class="stat-value" id="stat-history">—</div></div>
+    <div class="stat-card gold"><div class="stat-label">Multi-Tech Sessions</div><div class="stat-value" id="stat-multi-tech">—</div></div>
   </div>
 
   <!-- TABS -->
@@ -435,12 +436,13 @@
       const res  = await fetch(`/api/admin/stats?admin_token=${adminToken}`);
       if (res.status === 401) { doLogout(); return; }
       const d    = await res.json();
-      document.getElementById('stat-orgs').textContent     = d.total_orgs     || 0;
-      document.getElementById('stat-sessions').textContent = d.total_sessions  || 0;
-      document.getElementById('stat-techs').textContent    = d.active_techs    || 0;
-      document.getElementById('stat-requests').textContent = d.service_requested || 0;
-      document.getElementById('stat-nexiq').textContent    = d.nexiq_connected  || 0;
-      document.getElementById('stat-history').textContent  = d.total_history   || 0;
+      document.getElementById('stat-orgs').textContent        = d.total_orgs          || 0;
+      document.getElementById('stat-sessions').textContent    = d.total_sessions       || 0;
+      document.getElementById('stat-techs').textContent       = d.active_techs         || 0;
+      document.getElementById('stat-requests').textContent    = d.service_requested    || 0;
+      document.getElementById('stat-nexiq').textContent       = d.nexiq_connected      || 0;
+      document.getElementById('stat-history').textContent     = d.total_history        || 0;
+      document.getElementById('stat-multi-tech').textContent  = d.multi_tech_sessions  || 0;
     } catch(e) {}
   }
 
