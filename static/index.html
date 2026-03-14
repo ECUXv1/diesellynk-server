@@ -323,11 +323,42 @@
   </div>
 
   <script>
-    // ── URL PARAMS ────────────────────────────────────────────
-    const params     = new URLSearchParams(location.search);
-    const sessionId  = params.get('session') || 'DL-default';
-    const driverToken = params.get('token') || '';
-    document.getElementById('session-pill-label').textContent = sessionId;
+    // ── SESSION INIT ──────────────────────────────────────────
+    // Driver flow: auto-create session on first load, persist tokens
+    const params = new URLSearchParams(location.search);
+    let sessionId   = params.get('session') || localStorage.getItem('dl_session_id') || '';
+    let driverToken = params.get('token')   || localStorage.getItem('dl_driver_token') || '';
+
+    async function initSession() {
+      // If we have a valid session already, use it
+      if (sessionId && driverToken) {
+        document.getElementById('session-pill-label').textContent = sessionId;
+        fetch(`/api/session/${encodeURIComponent(sessionId)}`)
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(applySessionData)
+          .catch(() => createNewSession()) // session gone (server restart), make new one
+          .finally(() => connectWs());
+        return;
+      }
+      await createNewSession();
+    }
+
+    async function createNewSession() {
+      try {
+        const res  = await fetch('/api/create-session', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+        const data = await res.json();
+        sessionId   = data.session_id;
+        driverToken = data.driver_token;
+        localStorage.setItem('dl_session_id',    sessionId);
+        localStorage.setItem('dl_driver_token',  driverToken);
+        document.getElementById('session-pill-label').textContent = sessionId;
+        connectWs();
+      } catch(e) {
+        document.getElementById('session-pill-label').textContent = 'Error';
+      }
+    }
+
+    document.getElementById('session-pill-label').textContent = sessionId || '…';
 
     // ── PARTICLES & BARS ──────────────────────────────────────
     const pc = document.getElementById('particles');
@@ -544,11 +575,7 @@
     }
 
     // ── BOOT ──────────────────────────────────────────────────
-    fetch(`/api/session/${encodeURIComponent(sessionId)}`)
-      .then(r => r.json())
-      .then(applySessionData)
-      .catch(() => {})
-      .finally(() => connectWs());
+    initSession();
   </script>
 </body>
 </html>

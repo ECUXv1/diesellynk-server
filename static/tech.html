@@ -450,29 +450,48 @@
     }
     grid.innerHTML = sessions.map(s => {
       const isPending = s.service_requested;
+      const isActive  = sessionId === s.session_id;
       const cls = isPending ? 'service-pending' : s.nexiq_connected ? 'active' : 'idle';
       const badge = isPending ? '<span class="si-status-badge service">Service Request</span>'
                   : s.nexiq_connected ? '<span class="si-status-badge active">Adapter Online</span>'
                   : '<span class="si-status-badge idle">Standby</span>';
       const truck = s.truck_info ? `${s.truck_info.year} ${s.truck_info.make} ${s.truck_info.model}` : 'No vehicle ID';
       const faults = s.fault_code_count > 0 ? `<div class="si-faults">⚠ ${s.fault_code_count} fault code${s.fault_code_count > 1 ? 's' : ''}</div>` : '';
+      const connectBtn = isPending && !isActive
+        ? `<div style="margin-top:10px;"><button onclick="event.stopPropagation();switchSession('${s.session_id}')" style="width:100%;padding:8px;background:linear-gradient(135deg,rgba(243,156,18,.2),rgba(243,156,18,.1));border:1px solid var(--warn-orange);border-radius:6px;color:var(--warn-orange);font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:.12em;cursor:pointer;text-transform:uppercase;">⚡ Connect Now</button></div>`
+        : isActive
+        ? `<div style="margin-top:8px;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--ack-yes);">● CONNECTED</div>`
+        : '';
       return `
         <div class="session-item ${cls}" onclick="switchSession('${s.session_id}')">
           <div class="si-top"><span class="si-id">${s.session_id}</span>${badge}</div>
           <div class="si-truck">${truck}</div>
           <div class="si-nexiq">${s.nexiq_connected ? '● ' + (s.adapter_name || 'Adapter') : '○ Adapter Offline'}</div>
           ${faults}
+          ${connectBtn}
         </div>`;
     }).join('');
   }
 
-  function switchSession(id) {
+  async function switchSession(id) {
     if (id === sessionId) return;
-    sessionId = id;
-    updateSessionUI();
-    if (ws) { ws.onclose = null; ws.close(); }
-    connectWs();
-    showToast('Switched to ' + id);
+    try {
+      const res  = await fetch(`/api/tech-join/${encodeURIComponent(id)}`, { method: 'POST' });
+      const data = await res.json();
+      if (data.tech_token) {
+        sessionId  = id;
+        techToken  = data.tech_token;
+        updateSessionUI();
+        if (ws) { ws.onclose = null; ws.close(); }
+        connectWs();
+        showToast('Connected to ' + id);
+        // Auto send "Technician Connected" command
+        await fetch(`/api/update/${encodeURIComponent(sessionId)}`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ tech_token: techToken, status:'Technician Connected', command:'Technician has joined — preparing diagnostics', requires_ack:false, priority:'info', show_modal:false })
+        });
+      }
+    } catch(e) { showToast('Failed to connect to session'); }
   }
 
   // ── HELPERS ────────────────────────────────────────────────

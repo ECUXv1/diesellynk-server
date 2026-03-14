@@ -373,6 +373,33 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
 
 // ── API ROUTES ────────────────────────────────────────────────────────────────
 
+/// POST /api/tech-join/{session_id}
+/// Tech joins an existing session — returns tech_token
+/// In production, protect this with admin auth or a pre-shared tech key
+#[post("/api/tech-join/{session_id}")]
+async fn tech_join(
+    path: web::Path<String>,
+    data: web::Data<AppState>,
+) -> impl Responder {
+    let session_id = path.into_inner();
+    let sessions = data.sessions.lock().unwrap();
+
+    match sessions.get(&session_id) {
+        Some(session) => {
+            #[derive(Serialize)]
+            struct TechJoinResponse { session_id: String, tech_token: String }
+            HttpResponse::Ok().json(TechJoinResponse {
+                session_id: session.session_id.clone(),
+                tech_token: session.tech_token.clone(),
+            })
+        },
+        None => HttpResponse::NotFound().json(ApiResponse {
+            ok: false,
+            message: "Session not found".to_string(),
+        }),
+    }
+}
+
 /// POST /api/create-session
 /// Tech creates a session — gets back both tokens + URLs
 #[post("/api/create-session")]
@@ -709,6 +736,7 @@ async fn main() -> std::io::Result<()> {
             .service(active_sessions)
             // Tech commands
             .service(update_session)
+            .service(tech_join)
             // Driver actions
             .service(customer_reply)
             .service(service_request)
