@@ -435,7 +435,11 @@
       renderFaultCodes(data.fault_codes || []);
 
       // Service request state
-      if (data.service_requested) markServiceSent();
+      if (data.service_requested) {
+        markServiceSent();
+      } else if (serviceRequested) {
+        resetServiceButton();
+      }
     }
 
     // ── TRUCK INFO ────────────────────────────────────────────
@@ -527,6 +531,22 @@
         });
       } catch(e) {}
       markServiceSent();
+    }
+
+    function resetServiceButton() {
+      serviceRequested = false;
+      const btn = document.getElementById('service-request-btn');
+      btn.className = 'service-request-btn';
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+      btn.innerHTML = `
+        <div class="srv-btn-inner">
+          <span class="srv-btn-icon">🛠</span>
+          <div class="srv-btn-text">
+            <div class="srv-btn-title">Request Technician</div>
+            <span class="srv-btn-sub">Tap to connect with a DieselLynk technician</span>
+          </div>
+        </div>`;
     }
 
     function markServiceSent() {

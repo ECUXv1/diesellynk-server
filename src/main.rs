@@ -469,6 +469,13 @@ async fn update_session(
         session.customer_ack = false;
         session.customer_message = String::new();
 
+        // If tech disconnects, reset service request so driver can request again
+        if payload.status == "Technician Disconnected" {
+            session.service_requested = false;
+            session.service_request_time = String::new();
+            session.service_type = String::new();
+        }
+
         push_event(session, "tech_command", format!(
             "Tech: '{}' | {}", session.command, session.priority
         ));
