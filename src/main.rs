@@ -1466,12 +1466,12 @@ async fn main() -> std::io::Result<()> {
         broadcaster,
     });
 
-    // Background cleanup task — runs every 5 minutes
-    let db_bg       = db.clone();
-    let state_bg    = app_state.clone();
-    tokio::spawn(async move {
+    // Background cleanup task — runs every 5 minutes using actix_rt
+    let db_bg    = db.clone();
+    let state_bg = app_state.clone();
+    actix_rt::spawn(async move {
         loop {
-            tokio::time::sleep(Duration::from_secs(300)).await;
+            actix_rt::time::sleep(Duration::from_secs(300)).await;
             let cutoff = (now_secs() - 43200) as i64; // 12 hours
             // Remove expired sessions from memory
             let mut sessions = state_bg.sessions.lock().unwrap();
