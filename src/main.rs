@@ -125,6 +125,8 @@ struct SessionState {
     service_request_time: String,
     service_type: String,
 
+    tablet_ws_url: String,   // noVNC websockify URL registered by the tablet
+
     event_log: Vec<EventEntry>,
 }
 
@@ -241,6 +243,7 @@ fn default_session(session_id: String, org_id: String) -> SessionState {
         service_requested: false,
         service_request_time: String::new(),
         service_type: String::new(),
+        tablet_ws_url: String::new(),
         event_log: Vec::new(),
     }
 }
@@ -375,6 +378,46 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
 }
 
 // ── API ROUTES ────────────────────────────────────────────────────────────────
+
+/// POST /api/tablet-register/{session_id}
+/// Tablet registers its Cloudflare tunnel URL so tech can connect remote desktop
+#[post("/api/tablet-register/{session_id}")]
+async fn tablet_register(
+    path: web::Path<String>,
+    data: web::Data<AppState>,
+    payload: web::Json<serde_json::Value>,
+) -> impl Responder {
+    let session_id = path.into_inner();
+
+    let driver_token = payload.get("driver_token")
+        .and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let ws_url = payload.get("ws_url")
+        .and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+    let json_to_broadcast = {
+        let mut sessions = data.sessions.lock().unwrap();
+        let session = match sessions.get_mut(&session_id) {
+            Some(s) => s,
+            None => return HttpResponse::NotFound().json(ApiResponse {
+                ok: false, message: "Session not found".to_string()
+            }),
+        };
+
+        if session.driver_token != driver_token {
+            return HttpResponse::Unauthorized().json(ApiResponse {
+                ok: false, message: "Invalid driver token".to_string()
+            });
+        }
+
+        session.tablet_ws_url = ws_url.clone();
+        push_event(session, "tablet", format!("Tablet registered tunnel: {}", ws_url));
+        serialize_session(session)
+    };
+
+    data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
+    println!("[Tablet] Registered WS URL for session {}: {}", session_id, ws_url);
+    HttpResponse::Ok().json(ApiResponse { ok: true, message: "Tablet registered".to_string() })
+}
 
 /// POST /api/tech-login
 #[post("/api/tech-login")]
@@ -736,6 +779,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(app_state.clone())
             .service(tech_login)
+            .service(tablet_register)
             .service(create_session)
             .service(get_session)
             .service(active_sessions)
