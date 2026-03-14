@@ -42,20 +42,54 @@ fn now_string() -> String {
 // To add orgs without redeploying, set env var:
 //   ORG_PASSWORDS="diesellynk:masterpass,fleet_abc:theirpass,acme:acmepass"
 
-fn load_org_passwords() -> HashMap<String, String> {
+fn load_org_registry() -> HashMap<String, OrgRecord> {
     let mut map = HashMap::new();
-    map.insert("diesellynk".to_string(),  "DL-master-2025!".to_string());
-    map.insert("demo_fleet".to_string(),  "demo1234".to_string());
+
+    let defaults = vec![
+        ("diesellynk", "DL-master-2025!", "DieselLynk Internal", true),
+        ("demo_fleet",  "demo1234",        "Demo Fleet",          false),
+    ];
+
+    for (id, pass, name, is_dl) in defaults {
+        map.insert(id.to_string(), OrgRecord {
+            org_id:        id.to_string(),
+            password:      pass.to_string(),
+            display_name:  name.to_string(),
+            created_at:    now_string(),
+            is_diesellynk: is_dl,
+            tech_count:    0,
+            session_count: 0,
+        });
+    }
 
     if let Ok(env_val) = std::env::var("ORG_PASSWORDS") {
         for entry in env_val.split(',') {
             let parts: Vec<&str> = entry.splitn(2, ':').collect();
             if parts.len() == 2 {
-                map.insert(parts[0].trim().to_string(), parts[1].trim().to_string());
+                let id = parts[0].trim().to_string();
+                map.insert(id.clone(), OrgRecord {
+                    org_id:        id.clone(),
+                    password:      parts[1].trim().to_string(),
+                    display_name:  id.clone(),
+                    created_at:    now_string(),
+                    is_diesellynk: id == "diesellynk",
+                    tech_count:    0,
+                    session_count: 0,
+                });
             }
         }
     }
     map
+}
+
+fn get_admin_credentials() -> (String, String) {
+    let username = std::env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string());
+    let password = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "DL-Admin-2025!".to_string());
+    (username, password)
+}
+
+fn validate_admin_token(admin_sessions: &HashMap<String, AdminSession>, token: &str) -> bool {
+    admin_sessions.contains_key(token)
 }
 
 // ── DATA STRUCTURES ───────────────────────────────────────────────────────────
@@ -205,6 +239,66 @@ struct CreateSessionResponse {
     driver_url: String,
 }
 
+// ── ADMIN STRUCTURES ──────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct OrgRecord {
+    org_id:       String,
+    password:     String,
+    display_name: String,
+    created_at:   String,
+    is_diesellynk: bool,
+    tech_count:   usize,
+    session_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SessionHistoryEntry {
+    session_id:   String,
+    org_id:       String,
+    started_at:   String,
+    ended_at:     String,
+    status:       String,
+    service_type: String,
+    fault_count:  usize,
+    truck_info:   Option<TruckInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AdminSession {
+    token:      String,
+    created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminLoginRequest {
+    username: String,
+    password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminAddOrgRequest {
+    org_id:       String,
+    password:     String,
+    display_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminResetPasswordRequest {
+    org_id:   String,
+    password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminRemoveOrgRequest {
+    org_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminAuthQuery {
+    admin_token: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct ApiResponse {
     ok: bool,
@@ -214,10 +308,12 @@ struct ApiResponse {
 // ── APP STATE ─────────────────────────────────────────────────────────────────
 
 struct AppState {
-    sessions:      Mutex<HashMap<String, SessionState>>,
-    tech_sessions: Mutex<HashMap<String, TechSession>>,
-    org_passwords: HashMap<String, String>,
-    broadcaster:   Addr<WsBroadcaster>,
+    sessions:        Mutex<HashMap<String, SessionState>>,
+    tech_sessions:   Mutex<HashMap<String, TechSession>>,
+    org_registry:    Mutex<HashMap<String, OrgRecord>>,
+    admin_sessions:  Mutex<HashMap<String, AdminSession>>,
+    session_history: Mutex<Vec<SessionHistoryEntry>>,
+    broadcaster:     Addr<WsBroadcaster>,
 }
 
 // ── SESSION HELPERS ───────────────────────────────────────────────────────────
@@ -264,7 +360,6 @@ fn push_event(session: &mut SessionState, kind: &str, message: String) {
 fn validate_tech_token(tech_sessions: &HashMap<String, TechSession>, token: &str) -> Option<TechSession> {
     tech_sessions.get(token).cloned()
 }
-
 // ── WEBSOCKET BROADCASTER ─────────────────────────────────────────────────────
 
 #[derive(Message)] #[rtype(result = "usize")]
@@ -428,10 +523,15 @@ async fn tech_login(
     let org_id   = payload.org_id.trim().to_lowercase();
     let password = payload.password.trim();
 
-    match data.org_passwords.get(&org_id) {
-        Some(correct) if correct.as_str() == password => {
+    let org = {
+        let registry = data.org_registry.lock().unwrap();
+        registry.get(&org_id).cloned()
+    };
+
+    match org {
+        Some(org) if org.password.as_str() == password => {
             let token = generate_token();
-            let is_diesellynk = org_id == "diesellynk";
+            let is_diesellynk = org.is_diesellynk;
             let tech_sess = TechSession {
                 tech_auth_token: token.clone(),
                 org_id: org_id.clone(),
@@ -734,6 +834,218 @@ async fn nexiq_status(
     HttpResponse::Ok().json(ApiResponse { ok: true, message: "Nexiq status updated".to_string() })
 }
 
+/// POST /api/admin/login
+#[post("/api/admin/login")]
+async fn admin_login(
+    data: web::Data<AppState>,
+    payload: web::Json<AdminLoginRequest>,
+) -> impl Responder {
+    let (admin_user, admin_pass) = get_admin_credentials();
+    if payload.username.trim() == admin_user && payload.password.trim() == admin_pass {
+        let token = generate_token();
+        data.admin_sessions.lock().unwrap().insert(token.clone(), AdminSession {
+            token: token.clone(),
+            created_at: now_string(),
+        });
+        println!("[Admin] Login successful");
+        #[derive(Serialize)]
+        struct R { ok: bool, admin_token: String }
+        HttpResponse::Ok().json(R { ok: true, admin_token: token })
+    } else {
+        HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Invalid admin credentials".to_string() })
+    }
+}
+
+/// GET /api/admin/orgs
+#[get("/api/admin/orgs")]
+async fn admin_get_orgs(
+    data: web::Data<AppState>,
+    query: web::Query<AdminAuthQuery>,
+) -> impl Responder {
+    let ok = {
+        let sessions = data.admin_sessions.lock().unwrap();
+        query.admin_token.as_deref().map(|t| validate_admin_token(&sessions, t)).unwrap_or(false)
+    };
+    if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
+
+    let registry  = data.org_registry.lock().unwrap();
+    let sessions  = data.sessions.lock().unwrap();
+    let tech_sess = data.tech_sessions.lock().unwrap();
+
+    let orgs: Vec<serde_json::Value> = registry.values().map(|org| {
+        let session_count = sessions.values().filter(|s| s.org_id == org.org_id).count();
+        let tech_count    = tech_sess.values().filter(|t| t.org_id == org.org_id).count();
+        serde_json::json!({
+            "org_id":        org.org_id,
+            "display_name":  org.display_name,
+            "created_at":    org.created_at,
+            "is_diesellynk": org.is_diesellynk,
+            "session_count": session_count,
+            "active_techs":  tech_count,
+        })
+    }).collect();
+
+    HttpResponse::Ok().json(orgs)
+}
+
+/// POST /api/admin/orgs/add
+#[post("/api/admin/orgs/add")]
+async fn admin_add_org(
+    data: web::Data<AppState>,
+    query: web::Query<AdminAuthQuery>,
+    payload: web::Json<AdminAddOrgRequest>,
+) -> impl Responder {
+    let ok = {
+        let sessions = data.admin_sessions.lock().unwrap();
+        query.admin_token.as_deref().map(|t| validate_admin_token(&sessions, t)).unwrap_or(false)
+    };
+    if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
+
+    let org_id = payload.org_id.trim().to_lowercase();
+    if org_id.is_empty() || payload.password.trim().is_empty() {
+        return HttpResponse::BadRequest().json(ApiResponse { ok: false, message: "org_id and password required".to_string() });
+    }
+
+    let mut registry = data.org_registry.lock().unwrap();
+    if registry.contains_key(&org_id) {
+        return HttpResponse::Conflict().json(ApiResponse { ok: false, message: "Org already exists".to_string() });
+    }
+
+    registry.insert(org_id.clone(), OrgRecord {
+        org_id:        org_id.clone(),
+        password:      payload.password.trim().to_string(),
+        display_name:  payload.display_name.trim().to_string(),
+        created_at:    now_string(),
+        is_diesellynk: false,
+        tech_count:    0,
+        session_count: 0,
+    });
+
+    println!("[Admin] New org added: {}", org_id);
+    HttpResponse::Ok().json(ApiResponse { ok: true, message: format!("Org '{}' created", org_id) })
+}
+
+/// POST /api/admin/orgs/remove
+#[post("/api/admin/orgs/remove")]
+async fn admin_remove_org(
+    data: web::Data<AppState>,
+    query: web::Query<AdminAuthQuery>,
+    payload: web::Json<AdminRemoveOrgRequest>,
+) -> impl Responder {
+    let ok = {
+        let sessions = data.admin_sessions.lock().unwrap();
+        query.admin_token.as_deref().map(|t| validate_admin_token(&sessions, t)).unwrap_or(false)
+    };
+    if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
+
+    let org_id = payload.org_id.trim().to_lowercase();
+    if org_id == "diesellynk" {
+        return HttpResponse::BadRequest().json(ApiResponse { ok: false, message: "Cannot remove DieselLynk org".to_string() });
+    }
+
+    let mut registry = data.org_registry.lock().unwrap();
+    if registry.remove(&org_id).is_some() {
+        println!("[Admin] Org removed: {}", org_id);
+        HttpResponse::Ok().json(ApiResponse { ok: true, message: format!("Org '{}' removed", org_id) })
+    } else {
+        HttpResponse::NotFound().json(ApiResponse { ok: false, message: "Org not found".to_string() })
+    }
+}
+
+/// POST /api/admin/orgs/reset-password
+#[post("/api/admin/orgs/reset-password")]
+async fn admin_reset_password(
+    data: web::Data<AppState>,
+    query: web::Query<AdminAuthQuery>,
+    payload: web::Json<AdminResetPasswordRequest>,
+) -> impl Responder {
+    let ok = {
+        let sessions = data.admin_sessions.lock().unwrap();
+        query.admin_token.as_deref().map(|t| validate_admin_token(&sessions, t)).unwrap_or(false)
+    };
+    if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
+
+    let org_id = payload.org_id.trim().to_lowercase();
+    let mut registry = data.org_registry.lock().unwrap();
+
+    if let Some(org) = registry.get_mut(&org_id) {
+        org.password = payload.password.trim().to_string();
+        println!("[Admin] Password reset for org: {}", org_id);
+        HttpResponse::Ok().json(ApiResponse { ok: true, message: format!("Password updated for '{}'", org_id) })
+    } else {
+        HttpResponse::NotFound().json(ApiResponse { ok: false, message: "Org not found".to_string() })
+    }
+}
+
+/// GET /api/admin/sessions — all sessions across all orgs
+#[get("/api/admin/sessions")]
+async fn admin_all_sessions(
+    data: web::Data<AppState>,
+    query: web::Query<AdminAuthQuery>,
+) -> impl Responder {
+    let ok = {
+        let admin_sessions = data.admin_sessions.lock().unwrap();
+        query.admin_token.as_deref().map(|t| validate_admin_token(&admin_sessions, t)).unwrap_or(false)
+    };
+    if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
+
+    let sessions = data.sessions.lock().unwrap();
+
+    #[derive(Serialize)]
+    struct SessionSummary {
+        session_id: String, org_id: String, status: String,
+        service_requested: bool, service_type: String,
+        nexiq_connected: bool, fault_code_count: usize,
+        truck_info: Option<TruckInfo>, service_request_time: String,
+        tablet_ws_url: String,
+    }
+
+    let list: Vec<SessionSummary> = sessions.values().map(|s| SessionSummary {
+        session_id: s.session_id.clone(), org_id: s.org_id.clone(),
+        status: s.status.clone(), service_requested: s.service_requested,
+        service_type: s.service_type.clone(), nexiq_connected: s.nexiq_connected,
+        fault_code_count: s.fault_codes.len(), truck_info: s.truck_info.clone(),
+        service_request_time: s.service_request_time.clone(),
+        tablet_ws_url: s.tablet_ws_url.clone(),
+    }).collect();
+
+    HttpResponse::Ok().json(list)
+}
+
+/// GET /api/admin/stats
+#[get("/api/admin/stats")]
+async fn admin_stats(
+    data: web::Data<AppState>,
+    query: web::Query<AdminAuthQuery>,
+) -> impl Responder {
+    let ok = {
+        let admin_sessions = data.admin_sessions.lock().unwrap();
+        query.admin_token.as_deref().map(|t| validate_admin_token(&admin_sessions, t)).unwrap_or(false)
+    };
+    if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
+
+    let sessions     = data.sessions.lock().unwrap();
+    let tech_sess    = data.tech_sessions.lock().unwrap();
+    let registry     = data.org_registry.lock().unwrap();
+    let history      = data.session_history.lock().unwrap();
+
+    let total_sessions      = sessions.len();
+    let active_techs        = tech_sess.len();
+    let service_requested   = sessions.values().filter(|s| s.service_requested).count();
+    let nexiq_connected     = sessions.values().filter(|s| s.nexiq_connected).count();
+    let total_orgs          = registry.len();
+    let total_history       = history.len();
+
+    HttpResponse::Ok().json(serde_json::json!({
+        "total_sessions":    total_sessions,
+        "active_techs":      active_techs,
+        "service_requested": service_requested,
+        "nexiq_connected":   nexiq_connected,
+        "total_orgs":        total_orgs,
+        "total_history":     total_history,
+    }))
+}
+
 /// WebSocket endpoint
 async fn ws_route(
     req: HttpRequest,
@@ -763,21 +1075,35 @@ async fn main() -> std::io::Result<()> {
     println!("║     Multi-Tenant Edition              ║");
     println!("╚═══════════════════════════════════════╝");
 
-    let org_passwords = load_org_passwords();
-    println!("[Orgs] {} org(s) loaded: {}", org_passwords.len(),
-        org_passwords.keys().cloned().collect::<Vec<_>>().join(", "));
+    let org_registry = load_org_registry();
+    println!("[Orgs] {} org(s) loaded: {}", org_registry.len(),
+        org_registry.keys().cloned().collect::<Vec<_>>().join(", "));
+
+    let (admin_user, _) = get_admin_credentials();
+    println!("[Admin] Admin username: {}", admin_user);
 
     let broadcaster = WsBroadcaster::new().start();
     let app_state   = web::Data::new(AppState {
-        sessions:      Mutex::new(HashMap::new()),
-        tech_sessions: Mutex::new(HashMap::new()),
-        org_passwords,
+        sessions:        Mutex::new(HashMap::new()),
+        tech_sessions:   Mutex::new(HashMap::new()),
+        org_registry:    Mutex::new(org_registry),
+        admin_sessions:  Mutex::new(HashMap::new()),
+        session_history: Mutex::new(Vec::new()),
         broadcaster,
     });
 
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
+            // Admin
+            .service(admin_login)
+            .service(admin_get_orgs)
+            .service(admin_add_org)
+            .service(admin_remove_org)
+            .service(admin_reset_password)
+            .service(admin_all_sessions)
+            .service(admin_stats)
+            // Tech auth
             .service(tech_login)
             .service(tablet_register)
             .service(create_session)
