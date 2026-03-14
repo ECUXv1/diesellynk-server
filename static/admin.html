@@ -176,6 +176,7 @@
   <div class="tabs">
     <div class="tab active" onclick="switchTab('orgs',this)">Organizations</div>
     <div class="tab" onclick="switchTab('sessions',this)">Live Sessions</div>
+    <div class="tab" onclick="switchTab('history',this)">Session History</div>
     <div class="tab" onclick="switchTab('setup',this)">Tablet Setup</div>
   </div>
 
@@ -224,6 +225,24 @@
           <th>Service Type</th><th>Nexiq</th><th>Fault Codes</th><th>Truck</th>
         </tr></thead>
         <tbody id="sessions-tbody"><tr><td colspan="7" class="tbl-empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── HISTORY PANEL ── -->
+  <div class="panel" id="panel-history">
+    <div class="sec-title">Session History</div>
+    <div class="tbl-wrap">
+      <div class="tbl-hdr">
+        <span class="tbl-title">Completed Sessions</span>
+        <button class="btn-sm" onclick="loadHistory()">↺ Refresh</button>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Session ID</th><th>Org</th><th>Service Type</th>
+          <th>Status</th><th>Fault Codes</th><th>Truck</th><th>Ended</th>
+        </tr></thead>
+        <tbody id="history-tbody"><tr><td colspan="7" class="tbl-empty">Loading...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -367,6 +386,7 @@
     document.getElementById('panel-' + name).classList.add('active');
     if (name === 'orgs')     loadOrgs();
     if (name === 'sessions') loadSessions();
+    if (name === 'history')  loadHistory();
     if (name === 'setup')    loadOrgsForSetup();
   }
 
@@ -378,6 +398,35 @@
     setInterval(loadStats, 10000);
     // Auto-refresh orgs every 30s
     setInterval(loadOrgs, 30000);
+  }
+
+  async function loadHistory() {
+    try {
+      const res     = await fetch(`/api/admin/history?admin_token=${adminToken}`);
+      if (res.status === 401) { doLogout(); return; }
+      const history = await res.json();
+      const tbody   = document.getElementById('history-tbody');
+      if (!history.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="tbl-empty">No session history yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = history.map(h => {
+        const truck = h.truck_info ? (() => { try { const t = JSON.parse(h.truck_info); return `${t.year} ${t.make} ${t.model}`; } catch(e) { return '—'; } })() : '—';
+        const ts    = h.ended_at ? new Date(parseInt(h.ended_at) * 1000).toLocaleString() : '—';
+        const stPill = h.service_type === 'diesellynk_tech'
+          ? '<span class="pill pill-gold" style="background:rgba(212,175,55,.1);color:var(--gold);border:1px solid rgba(212,175,55,.25);">DL Tech</span>'
+          : '<span class="pill pill-blue">Own Tech</span>';
+        return `<tr>
+          <td><span style="font-family:'Orbitron',sans-serif;font-size:10px;color:var(--gold);">${h.session_id}</span></td>
+          <td><span style="font-family:'Orbitron',sans-serif;font-size:10px;">${h.org_id}</span></td>
+          <td>${stPill}</td>
+          <td><span style="font-size:12px;">${h.status}</span></td>
+          <td><span style="font-family:'Orbitron',sans-serif;font-size:12px;color:${h.fault_count > 0 ? 'var(--red-l)' : 'var(--muted)'};">${h.fault_count}</span></td>
+          <td style="font-size:12px;">${truck}</td>
+          <td style="font-size:11px;color:var(--muted);">${ts}</td>
+        </tr>`;
+      }).join('');
+    } catch(e) { console.error(e); }
   }
 
   // ── STATS ──────────────────────────────────────────────────

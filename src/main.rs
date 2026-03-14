@@ -4,122 +4,155 @@ use actix_web::{
     get, post, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 use actix_web_actors::ws;
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-// ── TOKEN / ID GENERATORS ─────────────────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 
 fn generate_token() -> String {
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
     format!("{:x}", ts ^ 0xDEADBEEFCAFEBABE)
 }
 
 fn generate_session_id() -> String {
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis();
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
     format!("DL-{:X}", ts)
 }
 
-fn now_string() -> String {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs().to_string())
-        .unwrap_or_else(|_| "0".to_string())
+fn now_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
-// ── ORG REGISTRY ─────────────────────────────────────────────────────────────
-// Org types:
-//   "diesellynk" — DieselLynk internal techs, see ALL diesellynk_tech requests
-//   anything else — company org, sees only their own sessions
-//
-// To add orgs without redeploying, set env var:
-//   ORG_PASSWORDS="diesellynk:masterpass,fleet_abc:theirpass,acme:acmepass"
+fn now_string() -> String {
+    now_secs().to_string()
+}
 
-fn load_org_registry() -> HashMap<String, OrgRecord> {
-    let mut map = HashMap::new();
+fn get_port() -> u16 {
+    std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8080)
+}
 
-    let defaults = vec![
-        ("diesellynk", "DL-master-2025!", "DieselLynk Internal", true),
-        ("demo_fleet",  "demo1234",        "Demo Fleet",          false),
-    ];
+fn get_admin_credentials() -> (String, String) {
+    (
+        std::env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string()),
+        std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "DL-Admin-2025!".to_string()),
+    )
+}
 
-    for (id, pass, name, is_dl) in defaults {
-        map.insert(id.to_string(), OrgRecord {
-            org_id:        id.to_string(),
-            password:      pass.to_string(),
-            display_name:  name.to_string(),
-            created_at:    now_string(),
-            is_diesellynk: is_dl,
-            tech_count:    0,
-            session_count: 0,
-        });
+// ── SQLITE DATABASE ───────────────────────────────────────────────────────────
+
+fn init_db(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch("
+        PRAGMA journal_mode=WAL;
+        PRAGMA foreign_keys=ON;
+
+        CREATE TABLE IF NOT EXISTS orgs (
+            org_id        TEXT PRIMARY KEY,
+            display_name  TEXT NOT NULL,
+            password      TEXT NOT NULL,
+            is_diesellynk INTEGER NOT NULL DEFAULT 0,
+            created_at    INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS sessions (
+            session_id            TEXT PRIMARY KEY,
+            org_id                TEXT NOT NULL,
+            driver_token          TEXT NOT NULL,
+            tech_token            TEXT NOT NULL,
+            status                TEXT NOT NULL DEFAULT 'Awaiting Technician',
+            command               TEXT NOT NULL DEFAULT '',
+            requires_ack          INTEGER NOT NULL DEFAULT 0,
+            customer_ack          INTEGER NOT NULL DEFAULT 0,
+            customer_message      TEXT NOT NULL DEFAULT '',
+            priority              TEXT NOT NULL DEFAULT 'info',
+            show_modal            INTEGER NOT NULL DEFAULT 0,
+            nexiq_connected       INTEGER NOT NULL DEFAULT 0,
+            adapter_name          TEXT NOT NULL DEFAULT '',
+            fault_codes           TEXT NOT NULL DEFAULT '[]',
+            truck_info            TEXT,
+            live_data             TEXT,
+            service_requested     INTEGER NOT NULL DEFAULT 0,
+            service_request_time  TEXT NOT NULL DEFAULT '',
+            service_type          TEXT NOT NULL DEFAULT '',
+            tablet_ws_url         TEXT NOT NULL DEFAULT '',
+            event_log             TEXT NOT NULL DEFAULT '[]',
+            connected_techs       TEXT NOT NULL DEFAULT '[]',
+            created_at            INTEGER NOT NULL,
+            last_activity         INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS session_history (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id   TEXT NOT NULL,
+            org_id       TEXT NOT NULL,
+            started_at   TEXT NOT NULL,
+            ended_at     TEXT NOT NULL,
+            status       TEXT NOT NULL,
+            service_type TEXT NOT NULL,
+            fault_count  INTEGER NOT NULL DEFAULT 0,
+            truck_info   TEXT,
+            created_at   INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS rate_limits (
+            ip            TEXT NOT NULL,
+            endpoint      TEXT NOT NULL,
+            hits          INTEGER NOT NULL DEFAULT 1,
+            window_start  INTEGER NOT NULL,
+            PRIMARY KEY (ip, endpoint)
+        );
+    ")?;
+
+    // Seed default orgs if not exists
+    let dl_exists: bool = conn.query_row(
+        "SELECT COUNT(*) FROM orgs WHERE org_id = 'diesellynk'",
+        [], |r| r.get::<_, i64>(0)
+    ).unwrap_or(0) > 0;
+
+    if !dl_exists {
+        let dl_pass = std::env::var("DL_MASTER_PASSWORD")
+            .unwrap_or_else(|_| "DL-master-2025!".to_string());
+        conn.execute(
+            "INSERT OR IGNORE INTO orgs (org_id, display_name, password, is_diesellynk, created_at)
+             VALUES (?1, ?2, ?3, 1, ?4)",
+            params!["diesellynk", "DieselLynk Internal", dl_pass, now_secs() as i64],
+        )?;
+        conn.execute(
+            "INSERT OR IGNORE INTO orgs (org_id, display_name, password, is_diesellynk, created_at)
+             VALUES (?1, ?2, ?3, 0, ?4)",
+            params!["demo_fleet", "Demo Fleet", "demo1234", now_secs() as i64],
+        )?;
     }
 
+    // Load any orgs from ORG_PASSWORDS env var
     if let Ok(env_val) = std::env::var("ORG_PASSWORDS") {
         for entry in env_val.split(',') {
             let parts: Vec<&str> = entry.splitn(2, ':').collect();
             if parts.len() == 2 {
-                let id = parts[0].trim().to_string();
-                map.insert(id.clone(), OrgRecord {
-                    org_id:        id.clone(),
-                    password:      parts[1].trim().to_string(),
-                    display_name:  id.clone(),
-                    created_at:    now_string(),
-                    is_diesellynk: id == "diesellynk",
-                    tech_count:    0,
-                    session_count: 0,
-                });
+                let id   = parts[0].trim();
+                let pass = parts[1].trim();
+                conn.execute(
+                    "INSERT OR IGNORE INTO orgs (org_id, display_name, password, is_diesellynk, created_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![id, id, pass, if id == "diesellynk" { 1 } else { 0 }, now_secs() as i64],
+                )?;
             }
         }
     }
-    map
+
+    Ok(())
 }
 
-fn get_admin_credentials() -> (String, String) {
-    let username = std::env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string());
-    let password = std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "DL-Admin-2025!".to_string());
-    (username, password)
-}
+type Db = Arc<Mutex<Connection>>;
 
-fn get_port() -> u16 {
-    std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(8080)
-}
-
-// Expire admin tokens older than 24 hours
-fn is_admin_token_valid(session: &AdminSession) -> bool {
-    let created: u64 = session.created_at.parse().unwrap_or(0);
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    now.saturating_sub(created) < 86400 // 24 hours
-}
-
-fn validate_admin_token(admin_sessions: &HashMap<String, AdminSession>, token: &str) -> bool {
-    admin_sessions.get(token).map(|s| is_admin_token_valid(s)).unwrap_or(false)
-}
-
-// Expire sessions older than 12 hours with no activity
-fn should_expire_session(session: &SessionState) -> bool {
-    if session.event_log.is_empty() { return false; }
-    let last_ts: u64 = session.event_log.last()
-        .and_then(|e| e.timestamp.parse().ok())
-        .unwrap_or(0);
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    now.saturating_sub(last_ts) > 43200 // 12 hours
+fn open_db() -> Db {
+    let path = std::env::var("DATABASE_URL").unwrap_or_else(|_| "/app/diesellynk.db".to_string());
+    let conn = Connection::open(&path).expect("Failed to open SQLite database");
+    init_db(&conn).expect("Failed to initialize database schema");
+    println!("[DB] SQLite opened at {}", path);
+    Arc::new(Mutex::new(conn))
 }
 
 // ── DATA STRUCTURES ───────────────────────────────────────────────────────────
@@ -127,83 +160,85 @@ fn should_expire_session(session: &SessionState) -> bool {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct EventEntry {
     timestamp: String,
-    kind: String,
-    message: String,
+    kind:      String,
+    message:   String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct FaultCode {
-    spn: u32,
-    fmi: u8,
-    source: String,
+    spn:         u32,
+    fmi:         u8,
+    source:      String,
     description: String,
-    active: bool,
-    count: u8,
+    active:      bool,
+    count:       u8,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct TruckInfo {
-    vin: String,
-    make: String,
-    model: String,
-    year: u16,
-    engine: String,
+    vin:      String,
+    make:     String,
+    model:    String,
+    year:     u16,
+    engine:   String,
     odometer: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct LiveData {
-    engine_rpm: Option<f32>,
-    coolant_temp: Option<f32>,
-    oil_pressure: Option<f32>,
-    boost_pressure: Option<f32>,
-    vehicle_speed: Option<f32>,
+    engine_rpm:      Option<f32>,
+    coolant_temp:    Option<f32>,
+    oil_pressure:    Option<f32>,
+    boost_pressure:  Option<f32>,
+    vehicle_speed:   Option<f32>,
     battery_voltage: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct SessionState {
-    session_id: String,
-    org_id: String,
-
+    session_id:           String,
+    org_id:               String,
     #[serde(skip_serializing)]
-    driver_token: String,
+    driver_token:         String,
     #[serde(skip_serializing)]
-    tech_token: String,
-
-    status: String,
-    command: String,
-    requires_ack: bool,
-    customer_ack: bool,
-    customer_message: String,
-    priority: String,
-    show_modal: bool,
-
-    nexiq_connected: bool,
-    adapter_name: String,
-    fault_codes: Vec<FaultCode>,
-    truck_info: Option<TruckInfo>,
-    live_data: Option<LiveData>,
-
-    service_requested: bool,
+    tech_token:           String,
+    status:               String,
+    command:              String,
+    requires_ack:         bool,
+    customer_ack:         bool,
+    customer_message:     String,
+    priority:             String,
+    show_modal:           bool,
+    nexiq_connected:      bool,
+    adapter_name:         String,
+    fault_codes:          Vec<FaultCode>,
+    truck_info:           Option<TruckInfo>,
+    live_data:            Option<LiveData>,
+    service_requested:    bool,
     service_request_time: String,
-    service_type: String,
-
-    tablet_ws_url: String,   // noVNC websockify URL registered by the tablet
-
-    event_log: Vec<EventEntry>,
+    service_type:         String,
+    tablet_ws_url:        String,
+    event_log:            Vec<EventEntry>,
+    connected_techs:      Vec<String>,  // list of tech org_ids currently connected
+    last_activity:        u64,
 }
-
-// ── TECH AUTH SESSION ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TechSession {
     tech_auth_token: String,
-    org_id: String,
-    is_diesellynk: bool,
+    org_id:          String,
+    is_diesellynk:   bool,
+    created_at:      u64,
+    last_seen:       u64,
 }
 
-// ── REQUEST / RESPONSE TYPES ──────────────────────────────────────────────────
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AdminSession {
+    token:      String,
+    created_at: u64,
+}
+
+// ── REQUEST/RESPONSE TYPES ────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 struct CreateSessionRequest {
@@ -212,7 +247,7 @@ struct CreateSessionRequest {
 
 #[derive(Debug, Deserialize)]
 struct TechLoginRequest {
-    org_id: String,
+    org_id:   String,
     password: String,
 }
 
@@ -223,12 +258,12 @@ struct TechJoinRequest {
 
 #[derive(Debug, Deserialize)]
 struct UpdateRequest {
-    tech_token: String,
-    status: String,
-    command: String,
+    tech_token:   String,
+    status:       String,
+    command:      String,
     requires_ack: bool,
-    priority: String,
-    show_modal: bool,
+    priority:     String,
+    show_modal:   bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -238,8 +273,8 @@ struct ActiveSessionsQuery {
 
 #[derive(Debug, Deserialize)]
 struct CustomerReplyRequest {
-    driver_token: String,
-    customer_ack: bool,
+    driver_token:     String,
+    customer_ack:     bool,
     customer_message: String,
 }
 
@@ -252,98 +287,240 @@ struct ServiceRequest {
 #[derive(Debug, Deserialize)]
 struct NexiqStatusRequest {
     driver_token: String,
-    connected: bool,
+    connected:    bool,
     adapter_name: String,
-    truck_info: Option<TruckInfo>,
-    fault_codes: Option<Vec<FaultCode>>,
-    live_data: Option<LiveData>,
+    truck_info:   Option<TruckInfo>,
+    fault_codes:  Option<Vec<FaultCode>>,
+    live_data:    Option<LiveData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ManualTruckInfoRequest {
+    driver_token: String,
+    vin:          String,
+    make:         String,
+    model:        String,
+    year:         u16,
+    engine:       String,
+    odometer:     Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
 struct CreateSessionResponse {
-    session_id: String,
-    org_id: String,
-    driver_token: String,
-    tech_token: String,
-    tech_url: String,
-    driver_url: String,
-}
-
-// ── ADMIN STRUCTURES ──────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct OrgRecord {
-    org_id:       String,
-    password:     String,
-    display_name: String,
-    created_at:   String,
-    is_diesellynk: bool,
-    tech_count:   usize,
-    session_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SessionHistoryEntry {
     session_id:   String,
     org_id:       String,
-    started_at:   String,
-    ended_at:     String,
-    status:       String,
-    service_type: String,
-    fault_count:  usize,
-    truck_info:   Option<TruckInfo>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AdminSession {
-    token:      String,
-    created_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AdminLoginRequest {
-    username: String,
-    password: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AdminAddOrgRequest {
-    org_id:       String,
-    password:     String,
-    display_name: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AdminResetPasswordRequest {
-    org_id:   String,
-    password: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AdminRemoveOrgRequest {
-    org_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AdminAuthQuery {
-    admin_token: Option<String>,
+    driver_token: String,
+    tech_token:   String,
+    tech_url:     String,
+    driver_url:   String,
 }
 
 #[derive(Debug, Serialize)]
 struct ApiResponse {
-    ok: bool,
+    ok:      bool,
     message: String,
+}
+
+// Admin types
+#[derive(Debug, Deserialize)]
+struct AdminLoginRequest    { username: String, password: String }
+#[derive(Debug, Deserialize)]
+struct AdminAddOrgRequest   { org_id: String, password: String, display_name: String }
+#[derive(Debug, Deserialize)]
+struct AdminResetPasswordRequest { org_id: String, password: String }
+#[derive(Debug, Deserialize)]
+struct AdminRemoveOrgRequest     { org_id: String }
+#[derive(Debug, Deserialize)]
+struct AdminAuthQuery            { admin_token: Option<String> }
+
+// ── RATE LIMITING ─────────────────────────────────────────────────────────────
+
+struct RateLimiter {
+    // in-memory: ip+endpoint -> (hits, window_start)
+    buckets: HashMap<String, (u32, u64)>,
+}
+
+impl RateLimiter {
+    fn new() -> Self { Self { buckets: HashMap::new() } }
+
+    // Returns true if request should be allowed
+    fn check(&mut self, key: &str, limit: u32, window_secs: u64) -> bool {
+        let now = now_secs();
+        let entry = self.buckets.entry(key.to_string()).or_insert((0, now));
+
+        if now - entry.1 >= window_secs {
+            // New window
+            *entry = (1, now);
+            true
+        } else if entry.0 < limit {
+            entry.0 += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    // Clean up old buckets periodically
+    fn cleanup(&mut self) {
+        let now = now_secs();
+        self.buckets.retain(|_, (_, window_start)| now - *window_start < 3600);
+    }
 }
 
 // ── APP STATE ─────────────────────────────────────────────────────────────────
 
 struct AppState {
-    sessions:        Mutex<HashMap<String, SessionState>>,
-    tech_sessions:   Mutex<HashMap<String, TechSession>>,
-    org_registry:    Mutex<HashMap<String, OrgRecord>>,
-    admin_sessions:  Mutex<HashMap<String, AdminSession>>,
-    session_history: Mutex<Vec<SessionHistoryEntry>>,
-    broadcaster:     Addr<WsBroadcaster>,
+    db:             Db,
+    sessions:       Mutex<HashMap<String, SessionState>>,
+    tech_sessions:  Mutex<HashMap<String, TechSession>>,
+    admin_sessions: Mutex<HashMap<String, AdminSession>>,
+    rate_limiter:   Mutex<RateLimiter>,
+    broadcaster:    Addr<WsBroadcaster>,
+}
+
+// ── SESSION DB HELPERS ────────────────────────────────────────────────────────
+
+fn save_session(db: &Db, s: &SessionState) {
+    let conn = db.lock().unwrap();
+    let fault_codes  = serde_json::to_string(&s.fault_codes).unwrap_or_default();
+    let truck_info   = s.truck_info.as_ref().and_then(|t| serde_json::to_string(t).ok());
+    let live_data    = s.live_data.as_ref().and_then(|l| serde_json::to_string(l).ok());
+    let event_log    = serde_json::to_string(&s.event_log).unwrap_or_default();
+    let conn_techs   = serde_json::to_string(&s.connected_techs).unwrap_or_default();
+
+    conn.execute(
+        "INSERT OR REPLACE INTO sessions
+         (session_id, org_id, driver_token, tech_token, status, command,
+          requires_ack, customer_ack, customer_message, priority, show_modal,
+          nexiq_connected, adapter_name, fault_codes, truck_info, live_data,
+          service_requested, service_request_time, service_type, tablet_ws_url,
+          event_log, connected_techs, created_at, last_activity)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)",
+        params![
+            s.session_id, s.org_id, s.driver_token, s.tech_token,
+            s.status, s.command,
+            s.requires_ack as i32, s.customer_ack as i32,
+            s.customer_message, s.priority, s.show_modal as i32,
+            s.nexiq_connected as i32, s.adapter_name,
+            fault_codes, truck_info, live_data,
+            s.service_requested as i32, s.service_request_time,
+            s.service_type, s.tablet_ws_url,
+            event_log, conn_techs,
+            now_secs() as i64, s.last_activity as i64,
+        ],
+    ).ok();
+}
+
+fn load_sessions_from_db(db: &Db) -> HashMap<String, SessionState> {
+    let conn = db.lock().unwrap();
+    let mut map = HashMap::new();
+
+    let mut stmt = match conn.prepare(
+        "SELECT session_id, org_id, driver_token, tech_token, status, command,
+                requires_ack, customer_ack, customer_message, priority, show_modal,
+                nexiq_connected, adapter_name, fault_codes, truck_info, live_data,
+                service_requested, service_request_time, service_type, tablet_ws_url,
+                event_log, connected_techs, last_activity
+         FROM sessions WHERE last_activity > ?1"
+    ) {
+        Ok(s) => s,
+        Err(_) => return map,
+    };
+
+    // Only load sessions active in last 12 hours
+    let cutoff = (now_secs() - 43200) as i64;
+    let rows = stmt.query_map(params![cutoff], |row| {
+        Ok((
+            row.get::<_, String>(0)?,   // session_id
+            row.get::<_, String>(1)?,   // org_id
+            row.get::<_, String>(2)?,   // driver_token
+            row.get::<_, String>(3)?,   // tech_token
+            row.get::<_, String>(4)?,   // status
+            row.get::<_, String>(5)?,   // command
+            row.get::<_, i32>(6)?,      // requires_ack
+            row.get::<_, i32>(7)?,      // customer_ack
+            row.get::<_, String>(8)?,   // customer_message
+            row.get::<_, String>(9)?,   // priority
+            row.get::<_, i32>(10)?,     // show_modal
+            row.get::<_, i32>(11)?,     // nexiq_connected
+            row.get::<_, String>(12)?,  // adapter_name
+            row.get::<_, String>(13)?,  // fault_codes
+            row.get::<_, Option<String>>(14)?, // truck_info
+            row.get::<_, Option<String>>(15)?, // live_data
+            row.get::<_, i32>(16)?,     // service_requested
+            row.get::<_, String>(17)?,  // service_request_time
+            row.get::<_, String>(18)?,  // service_type
+            row.get::<_, String>(19)?,  // tablet_ws_url
+            row.get::<_, String>(20)?,  // event_log
+            row.get::<_, String>(21)?,  // connected_techs
+            row.get::<_, i64>(22)?,     // last_activity
+        ))
+    });
+
+    if let Ok(rows) = rows {
+        for row in rows.flatten() {
+            let s = SessionState {
+                session_id:           row.0.clone(),
+                org_id:               row.1,
+                driver_token:         row.2,
+                tech_token:           row.3,
+                status:               row.4,
+                command:              row.5,
+                requires_ack:         row.6 != 0,
+                customer_ack:         row.7 != 0,
+                customer_message:     row.8,
+                priority:             row.9,
+                show_modal:           row.10 != 0,
+                nexiq_connected:      row.11 != 0,
+                adapter_name:         row.12,
+                fault_codes:          serde_json::from_str(&row.13).unwrap_or_default(),
+                truck_info:           row.14.and_then(|s| serde_json::from_str(&s).ok()),
+                live_data:            row.15.and_then(|s| serde_json::from_str(&s).ok()),
+                service_requested:    row.16 != 0,
+                service_request_time: row.17,
+                service_type:         row.18,
+                tablet_ws_url:        row.19,
+                event_log:            serde_json::from_str(&row.20).unwrap_or_default(),
+                connected_techs:      serde_json::from_str(&row.21).unwrap_or_default(),
+                last_activity:        row.22 as u64,
+            };
+            map.insert(row.0, s);
+        }
+    }
+    map
+}
+
+fn save_history(db: &Db, s: &SessionState) {
+    let conn = db.lock().unwrap();
+    let truck_info = s.truck_info.as_ref().and_then(|t| serde_json::to_string(t).ok());
+    let started_at = s.event_log.first().map(|e| e.timestamp.clone()).unwrap_or_default();
+    conn.execute(
+        "INSERT INTO session_history
+         (session_id, org_id, started_at, ended_at, status, service_type, fault_count, truck_info, created_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+        params![
+            s.session_id, s.org_id, started_at, now_string(),
+            s.status, s.service_type, s.fault_codes.len() as i64,
+            truck_info, now_secs() as i64,
+        ],
+    ).ok();
+}
+
+// Org DB helpers
+fn load_orgs_from_db(db: &Db) -> HashMap<String, (String, String, bool)> {
+    // Returns: org_id -> (password, display_name, is_diesellynk)
+    let conn = db.lock().unwrap();
+    let mut map = HashMap::new();
+    if let Ok(mut stmt) = conn.prepare("SELECT org_id, password, display_name, is_diesellynk FROM orgs") {
+        if let Ok(rows) = stmt.query_map([], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, i32>(3)?))
+        }) {
+            for row in rows.flatten() {
+                map.insert(row.0, (row.1, row.2, row.3 != 0));
+            }
+        }
+    }
+    map
 }
 
 // ── SESSION HELPERS ───────────────────────────────────────────────────────────
@@ -352,25 +529,27 @@ fn default_session(session_id: String, org_id: String) -> SessionState {
     SessionState {
         session_id: session_id.clone(),
         org_id,
-        driver_token: generate_token(),
-        tech_token:   generate_token(),
-        status:  "Awaiting Technician".to_string(),
-        command: "Session created — standby for tech connection".to_string(),
-        requires_ack: false,
-        customer_ack: false,
-        customer_message: String::new(),
-        priority: "info".to_string(),
-        show_modal: false,
-        nexiq_connected: false,
-        adapter_name: String::new(),
-        fault_codes: Vec::new(),
-        truck_info: None,
-        live_data: None,
-        service_requested: false,
+        driver_token:         generate_token(),
+        tech_token:           generate_token(),
+        status:               "Awaiting Technician".to_string(),
+        command:              "Session created — standby for tech connection".to_string(),
+        requires_ack:         false,
+        customer_ack:         false,
+        customer_message:     String::new(),
+        priority:             "info".to_string(),
+        show_modal:           false,
+        nexiq_connected:      false,
+        adapter_name:         String::new(),
+        fault_codes:          Vec::new(),
+        truck_info:           None,
+        live_data:            None,
+        service_requested:    false,
         service_request_time: String::new(),
-        service_type: String::new(),
-        tablet_ws_url: String::new(),
-        event_log: Vec::new(),
+        service_type:         String::new(),
+        tablet_ws_url:        String::new(),
+        event_log:            Vec::new(),
+        connected_techs:      Vec::new(),
+        last_activity:        now_secs(),
     }
 }
 
@@ -384,12 +563,39 @@ fn push_event(session: &mut SessionState, kind: &str, message: String) {
         kind: kind.to_string(),
         message,
     });
-    if session.event_log.len() > 100 { session.event_log.remove(0); }
+    if session.event_log.len() > 200 { session.event_log.remove(0); }
+    session.last_activity = now_secs();
 }
 
 fn validate_tech_token(tech_sessions: &HashMap<String, TechSession>, token: &str) -> Option<TechSession> {
-    tech_sessions.get(token).cloned()
+    tech_sessions.get(token).filter(|t| {
+        // Tech sessions expire after 8 hours of inactivity
+        now_secs() - t.last_seen < 28800
+    }).cloned()
 }
+
+fn validate_admin_token(admin_sessions: &HashMap<String, AdminSession>, token: &str) -> bool {
+    admin_sessions.get(token)
+        .map(|s| now_secs() - s.created_at < 86400) // 24h expiry
+        .unwrap_or(false)
+}
+
+fn check_rate_limit(state: &web::Data<AppState>, ip: &str, endpoint: &str, limit: u32, window: u64) -> bool {
+    let key = format!("{}:{}", ip, endpoint);
+    let mut rl = state.rate_limiter.lock().unwrap();
+    rl.check(&key, limit, window)
+}
+
+fn get_client_ip(req: &HttpRequest) -> String {
+    req.headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .unwrap_or("unknown")
+        .trim()
+        .to_string()
+}
+
 // ── WEBSOCKET BROADCASTER ─────────────────────────────────────────────────────
 
 #[derive(Message)] #[rtype(result = "usize")]
@@ -405,7 +611,7 @@ struct Broadcast { room: String, message: String }
 struct WsMessage(pub String);
 
 struct WsBroadcaster {
-    rooms: HashMap<String, HashMap<usize, Recipient<WsMessage>>>,
+    rooms:   HashMap<String, HashMap<usize, Recipient<WsMessage>>>,
     next_id: usize,
 }
 
@@ -456,7 +662,7 @@ impl WsSession {
     }
     fn start_heartbeat(&self, ctx: &mut ws::WebsocketContext<Self>) {
         ctx.run_interval(Duration::from_secs(5), |act, ctx| {
-            if Instant::now().duration_since(act.hb) > Duration::from_secs(20) {
+            if Instant::now().duration_since(act.hb) > Duration::from_secs(30) {
                 act.broadcaster.do_send(Disconnect { room: act.room.clone(), id: act.id });
                 ctx.stop(); return;
             }
@@ -491,11 +697,11 @@ impl Handler<WsMessage> for WsSession {
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
     fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match item {
-            Ok(ws::Message::Ping(m))        => { self.hb = Instant::now(); ctx.pong(&m); }
-            Ok(ws::Message::Pong(_))        => { self.hb = Instant::now(); }
-            Ok(ws::Message::Text(_))        => { self.hb = Instant::now(); }
-            Ok(ws::Message::Binary(_))      => { self.hb = Instant::now(); }
-            Ok(ws::Message::Close(reason))  => { ctx.close(reason); ctx.stop(); }
+            Ok(ws::Message::Ping(m))       => { self.hb = Instant::now(); ctx.pong(&m); }
+            Ok(ws::Message::Pong(_))       => { self.hb = Instant::now(); }
+            Ok(ws::Message::Text(_))       => { self.hb = Instant::now(); }
+            Ok(ws::Message::Binary(_))     => { self.hb = Instant::now(); }
+            Ok(ws::Message::Close(reason)) => { ctx.close(reason); ctx.stop(); }
             Err(_) => ctx.stop(),
             _ => {}
         }
@@ -504,75 +710,42 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
 
 // ── API ROUTES ────────────────────────────────────────────────────────────────
 
-/// POST /api/tablet-register/{session_id}
-/// Tablet registers its Cloudflare tunnel URL so tech can connect remote desktop
-#[post("/api/tablet-register/{session_id}")]
-async fn tablet_register(
-    path: web::Path<String>,
-    data: web::Data<AppState>,
-    payload: web::Json<serde_json::Value>,
-) -> impl Responder {
-    let session_id = path.into_inner();
-
-    let driver_token = payload.get("driver_token")
-        .and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let ws_url = payload.get("ws_url")
-        .and_then(|v| v.as_str()).unwrap_or("").to_string();
-
-    let json_to_broadcast = {
-        let mut sessions = data.sessions.lock().unwrap();
-        let session = match sessions.get_mut(&session_id) {
-            Some(s) => s,
-            None => return HttpResponse::NotFound().json(ApiResponse {
-                ok: false, message: "Session not found".to_string()
-            }),
-        };
-
-        if session.driver_token != driver_token {
-            return HttpResponse::Unauthorized().json(ApiResponse {
-                ok: false, message: "Invalid driver token".to_string()
-            });
-        }
-
-        session.tablet_ws_url = ws_url.clone();
-        push_event(session, "tablet", format!("Tablet registered tunnel: {}", ws_url));
-        serialize_session(session)
-    };
-
-    data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
-    println!("[Tablet] Registered WS URL for session {}: {}", session_id, ws_url);
-    HttpResponse::Ok().json(ApiResponse { ok: true, message: "Tablet registered".to_string() })
-}
-
 /// POST /api/tech-login
 #[post("/api/tech-login")]
 async fn tech_login(
+    req: HttpRequest,
     data: web::Data<AppState>,
     payload: web::Json<TechLoginRequest>,
 ) -> impl Responder {
+    let ip = get_client_ip(&req);
+    // Rate limit: 10 attempts per minute per IP
+    if !check_rate_limit(&data, &ip, "tech-login", 10, 60) {
+        return HttpResponse::TooManyRequests().json(ApiResponse {
+            ok: false, message: "Too many login attempts — please wait".to_string()
+        });
+    }
+
     let org_id   = payload.org_id.trim().to_lowercase();
     let password = payload.password.trim();
 
-    let org = {
-        let registry = data.org_registry.lock().unwrap();
-        registry.get(&org_id).cloned()
-    };
-
-    match org {
-        Some(org) if org.password.as_str() == password => {
+    let orgs = load_orgs_from_db(&data.db);
+    match orgs.get(&org_id) {
+        Some((correct_pass, _, is_dl)) if correct_pass.as_str() == password => {
             let token = generate_token();
-            let is_diesellynk = org.is_diesellynk;
+            let is_diesellynk = *is_dl;
             let tech_sess = TechSession {
                 tech_auth_token: token.clone(),
                 org_id: org_id.clone(),
                 is_diesellynk,
+                created_at: now_secs(),
+                last_seen:  now_secs(),
             };
             data.tech_sessions.lock().unwrap().insert(token.clone(), tech_sess);
             println!("[Auth] Tech logged in: org={}", org_id);
 
             #[derive(Serialize)]
-            struct LoginResponse { ok: bool, tech_auth_token: String, org_id: String, is_diesellynk: bool }
-            HttpResponse::Ok().json(LoginResponse { ok: true, tech_auth_token: token, org_id, is_diesellynk })
+            struct R { ok: bool, tech_auth_token: String, org_id: String, is_diesellynk: bool }
+            HttpResponse::Ok().json(R { ok: true, tech_auth_token: token, org_id, is_diesellynk })
         }
         _ => HttpResponse::Unauthorized().json(ApiResponse {
             ok: false, message: "Invalid org ID or password".to_string()
@@ -583,9 +756,18 @@ async fn tech_login(
 /// POST /api/create-session
 #[post("/api/create-session")]
 async fn create_session(
+    req: HttpRequest,
     data: web::Data<AppState>,
     payload: web::Json<CreateSessionRequest>,
 ) -> impl Responder {
+    let ip = get_client_ip(&req);
+    // Rate limit: 30 sessions per minute per IP (handles fleet boot-up storms)
+    if !check_rate_limit(&data, &ip, "create-session", 30, 60) {
+        return HttpResponse::TooManyRequests().json(ApiResponse {
+            ok: false, message: "Too many session requests".to_string()
+        });
+    }
+
     let org_id = payload.org_id.clone()
         .unwrap_or_else(|| "unknown".to_string())
         .trim().to_lowercase();
@@ -602,6 +784,7 @@ async fn create_session(
         org_id,
     };
 
+    save_session(&data.db, &session);
     data.sessions.lock().unwrap().insert(session_id, session);
     HttpResponse::Ok().json(response)
 }
@@ -609,8 +792,9 @@ async fn create_session(
 /// GET /api/session/{session_id}
 #[get("/api/session/{session_id}")]
 async fn get_session(path: web::Path<String>, data: web::Data<AppState>) -> impl Responder {
+    let session_id = path.into_inner();
     let sessions = data.sessions.lock().unwrap();
-    match sessions.get(&path.into_inner()) {
+    match sessions.get(&session_id) {
         Some(s) => HttpResponse::Ok().json(s),
         None    => HttpResponse::NotFound().json(ApiResponse { ok: false, message: "Session not found".to_string() }),
     }
@@ -626,22 +810,27 @@ async fn tech_join(
     let session_id = path.into_inner();
 
     let tech_sess = {
-        let tech_sessions = data.tech_sessions.lock().unwrap();
+        let mut tech_sessions = data.tech_sessions.lock().unwrap();
         match validate_tech_token(&tech_sessions, &payload.tech_auth_token) {
-            Some(ts) => ts,
+            Some(ts) => {
+                // Update last_seen
+                if let Some(t) = tech_sessions.get_mut(&payload.tech_auth_token) {
+                    t.last_seen = now_secs();
+                }
+                ts
+            },
             None => return HttpResponse::Unauthorized().json(ApiResponse {
                 ok: false, message: "Invalid or expired token — please log in again".to_string()
             }),
         }
     };
 
-    let sessions = data.sessions.lock().unwrap();
-    let session  = match sessions.get(&session_id) {
+    let mut sessions = data.sessions.lock().unwrap();
+    let session = match sessions.get_mut(&session_id) {
         Some(s) => s,
         None    => return HttpResponse::NotFound().json(ApiResponse { ok: false, message: "Session not found".to_string() }),
     };
 
-    // Access control
     let can_access = if tech_sess.is_diesellynk {
         session.service_type == "diesellynk_tech" || session.service_type.is_empty()
     } else {
@@ -654,25 +843,38 @@ async fn tech_join(
         });
     }
 
+    // Add tech to connected_techs list if not already there
+    if !session.connected_techs.contains(&tech_sess.org_id) {
+        session.connected_techs.push(tech_sess.org_id.clone());
+        push_event(session, "tech_join", format!("Tech joined: {}", tech_sess.org_id));
+        save_session(&data.db, session);
+    }
+
     #[derive(Serialize)]
-    struct TechJoinResponse { session_id: String, tech_token: String, org_id: String }
-    HttpResponse::Ok().json(TechJoinResponse {
+    struct R { session_id: String, tech_token: String, org_id: String }
+    HttpResponse::Ok().json(R {
         session_id: session.session_id.clone(),
         tech_token: session.tech_token.clone(),
-        org_id: session.org_id.clone(),
+        org_id:     session.org_id.clone(),
     })
 }
 
-/// GET /api/active-sessions?tech_auth_token=...
+/// GET /api/active-sessions
 #[get("/api/active-sessions")]
 async fn active_sessions(
     data: web::Data<AppState>,
     query: web::Query<ActiveSessionsQuery>,
 ) -> impl Responder {
     let tech_sess = {
-        let tech_sessions = data.tech_sessions.lock().unwrap();
+        let mut tech_sessions = data.tech_sessions.lock().unwrap();
         match query.tech_auth_token.as_deref().and_then(|t| validate_tech_token(&tech_sessions, t)) {
-            Some(ts) => ts,
+            Some(ts) => {
+                if let Some(t) = query.tech_auth_token.as_deref()
+                    .and_then(|tok| tech_sessions.get_mut(tok)) {
+                    t.last_seen = now_secs();
+                }
+                ts
+            },
             None => return HttpResponse::Unauthorized().json(ApiResponse {
                 ok: false, message: "Please log in to view sessions".to_string()
             }),
@@ -687,28 +889,29 @@ async fn active_sessions(
         service_requested: bool, service_type: String,
         nexiq_connected: bool, fault_code_count: usize,
         truck_info: Option<TruckInfo>, service_request_time: String,
-        adapter_name: String,
+        adapter_name: String, connected_tech_count: usize,
     }
 
     let summaries: Vec<SessionSummary> = sessions.values()
         .filter(|s| {
             if tech_sess.is_diesellynk {
-                // DieselLynk techs see:
-                // 1. Any session that requested diesellynk_tech service
-                // 2. All sessions in the diesellynk org itself
                 s.service_type == "diesellynk_tech" || s.org_id == "diesellynk"
             } else {
-                // Fleet techs see only their own org's sessions
                 s.org_id == tech_sess.org_id
             }
         })
         .map(|s| SessionSummary {
-            session_id: s.session_id.clone(), org_id: s.org_id.clone(),
-            status: s.status.clone(), service_requested: s.service_requested,
-            service_type: s.service_type.clone(), nexiq_connected: s.nexiq_connected,
-            fault_code_count: s.fault_codes.len(), truck_info: s.truck_info.clone(),
+            session_id:           s.session_id.clone(),
+            org_id:               s.org_id.clone(),
+            status:               s.status.clone(),
+            service_requested:    s.service_requested,
+            service_type:         s.service_type.clone(),
+            nexiq_connected:      s.nexiq_connected,
+            fault_code_count:     s.fault_codes.len(),
+            truck_info:           s.truck_info.clone(),
             service_request_time: s.service_request_time.clone(),
-            adapter_name: s.adapter_name.clone(),
+            adapter_name:         s.adapter_name.clone(),
+            connected_tech_count: s.connected_techs.len(),
         })
         .collect();
 
@@ -747,43 +950,19 @@ async fn update_session(
             session.service_requested    = false;
             session.service_request_time = String::new();
             session.service_type         = String::new();
+            session.connected_techs.clear();
         }
 
         push_event(session, "tech_command", format!("Tech: '{}' | {}", session.command, session.priority));
-        serialize_session(session)
+        let json = serialize_session(session);
+        save_session(&data.db, session);
+
+        // Write history on disconnect or complete
+        if payload.status == "Technician Disconnected" || payload.status == "Session Complete" {
+            save_history(&data.db, session);
+        }
+        json
     };
-
-    // Write to session history on disconnect
-    if payload.status == "Technician Disconnected" || payload.status == "Session Complete" {
-        let sessions = data.sessions.lock().unwrap();
-        if let Some(s) = sessions.get(&session_id) {
-            let entry = SessionHistoryEntry {
-                session_id:   s.session_id.clone(),
-                org_id:       s.org_id.clone(),
-                started_at:   s.event_log.first().map(|e| e.timestamp.clone()).unwrap_or_default(),
-                ended_at:     now_string(),
-                status:       payload.status.clone(),
-                service_type: s.service_type.clone(),
-                fault_count:  s.fault_codes.len(),
-                truck_info:   s.truck_info.clone(),
-            };
-            drop(sessions);
-            data.session_history.lock().unwrap().push(entry);
-        }
-    }
-
-    // Clean up expired sessions periodically
-    {
-        let mut sessions = data.sessions.lock().unwrap();
-        let expired: Vec<String> = sessions.values()
-            .filter(|s| should_expire_session(s))
-            .map(|s| s.session_id.clone())
-            .collect();
-        for id in expired {
-            println!("[Cleanup] Expiring stale session: {}", id);
-            sessions.remove(&id);
-        }
-    }
 
     data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
     HttpResponse::Ok().json(ApiResponse { ok: true, message: "Updated".to_string() })
@@ -814,7 +993,9 @@ async fn customer_reply(
         if payload.customer_ack { session.requires_ack = false; session.show_modal = false; }
 
         push_event(session, "driver_reply", format!("Driver: ack={} | '{}'", session.customer_ack, session.customer_message));
-        serialize_session(session)
+        let json = serialize_session(session);
+        save_session(&data.db, session);
+        json
     };
 
     data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
@@ -824,10 +1005,19 @@ async fn customer_reply(
 /// POST /api/service-request/{session_id}
 #[post("/api/service-request/{session_id}")]
 async fn service_request(
+    req: HttpRequest,
     path: web::Path<String>,
     data: web::Data<AppState>,
     payload: web::Json<ServiceRequest>,
 ) -> impl Responder {
+    let ip = get_client_ip(&req);
+    // Rate limit: 5 service requests per minute per IP
+    if !check_rate_limit(&data, &ip, "service-request", 5, 60) {
+        return HttpResponse::TooManyRequests().json(ApiResponse {
+            ok: false, message: "Too many requests".to_string()
+        });
+    }
+
     let session_id = path.into_inner();
 
     let json_to_broadcast = {
@@ -849,7 +1039,9 @@ async fn service_request(
         session.priority = "action".to_string();
 
         push_event(session, "service_request", format!("Driver requested service — type: {}", session.service_type));
-        serialize_session(session)
+        let json = serialize_session(session);
+        save_session(&data.db, session);
+        json
     };
 
     data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
@@ -895,32 +1087,119 @@ async fn nexiq_status(
             push_event(session, "fault_codes", format!("{} fault code(s) detected", session.fault_codes.len()));
         }
 
-        serialize_session(session)
+        let json = serialize_session(session);
+        save_session(&data.db, session);
+        json
     };
 
     data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
     HttpResponse::Ok().json(ApiResponse { ok: true, message: "Nexiq status updated".to_string() })
 }
 
+/// POST /api/manual-truck-info/{session_id}
+/// Driver enters truck info manually when no Nexiq adapter available
+#[post("/api/manual-truck-info/{session_id}")]
+async fn manual_truck_info(
+    path: web::Path<String>,
+    data: web::Data<AppState>,
+    payload: web::Json<ManualTruckInfoRequest>,
+) -> impl Responder {
+    let session_id = path.into_inner();
+
+    let json_to_broadcast = {
+        let mut sessions = data.sessions.lock().unwrap();
+        let session = match sessions.get_mut(&session_id) {
+            Some(s) => s,
+            None => return HttpResponse::NotFound().json(ApiResponse { ok: false, message: "Session not found".to_string() }),
+        };
+
+        if session.driver_token != payload.driver_token {
+            return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Invalid driver token".to_string() });
+        }
+
+        session.truck_info = Some(TruckInfo {
+            vin:      payload.vin.trim().to_uppercase(),
+            make:     payload.make.trim().to_string(),
+            model:    payload.model.trim().to_string(),
+            year:     payload.year,
+            engine:   payload.engine.trim().to_string(),
+            odometer: payload.odometer,
+        });
+
+        push_event(session, "truck_id", format!(
+            "Manual entry: {} {} {} {} (VIN: {})",
+            payload.year, payload.make, payload.model, payload.engine, payload.vin
+        ));
+
+        let json = serialize_session(session);
+        save_session(&data.db, session);
+        json
+    };
+
+    data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
+    HttpResponse::Ok().json(ApiResponse { ok: true, message: "Truck info saved".to_string() })
+}
+
+/// POST /api/tablet-register/{session_id}
+#[post("/api/tablet-register/{session_id}")]
+async fn tablet_register(
+    path: web::Path<String>,
+    data: web::Data<AppState>,
+    payload: web::Json<serde_json::Value>,
+) -> impl Responder {
+    let session_id    = path.into_inner();
+    let driver_token  = payload.get("driver_token").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let ws_url        = payload.get("ws_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+    let json_to_broadcast = {
+        let mut sessions = data.sessions.lock().unwrap();
+        let session = match sessions.get_mut(&session_id) {
+            Some(s) => s,
+            None => return HttpResponse::NotFound().json(ApiResponse { ok: false, message: "Session not found".to_string() }),
+        };
+
+        if session.driver_token != driver_token {
+            return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Invalid driver token".to_string() });
+        }
+
+        session.tablet_ws_url = ws_url.clone();
+        push_event(session, "tablet", format!("Tablet registered tunnel: {}", ws_url));
+        let json = serialize_session(session);
+        save_session(&data.db, session);
+        json
+    };
+
+    data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
+    HttpResponse::Ok().json(ApiResponse { ok: true, message: "Tablet registered".to_string() })
+}
+
+// ── ADMIN ROUTES ──────────────────────────────────────────────────────────────
+
 /// POST /api/admin/login
 #[post("/api/admin/login")]
 async fn admin_login(
+    req: HttpRequest,
     data: web::Data<AppState>,
     payload: web::Json<AdminLoginRequest>,
 ) -> impl Responder {
+    let ip = get_client_ip(&req);
+    if !check_rate_limit(&data, &ip, "admin-login", 5, 60) {
+        return HttpResponse::TooManyRequests().json(ApiResponse {
+            ok: false, message: "Too many attempts".to_string()
+        });
+    }
+
     let (admin_user, admin_pass) = get_admin_credentials();
     if payload.username.trim() == admin_user && payload.password.trim() == admin_pass {
         let token = generate_token();
         data.admin_sessions.lock().unwrap().insert(token.clone(), AdminSession {
-            token: token.clone(),
-            created_at: now_string(),
+            token: token.clone(), created_at: now_secs(),
         });
-        println!("[Admin] Login successful");
         #[derive(Serialize)]
         struct R { ok: bool, admin_token: String }
         HttpResponse::Ok().json(R { ok: true, admin_token: token })
     } else {
-        HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Invalid admin credentials".to_string() })
+        HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Invalid credentials".to_string() })
     }
 }
 
@@ -930,31 +1209,25 @@ async fn admin_get_orgs(
     data: web::Data<AppState>,
     query: web::Query<AdminAuthQuery>,
 ) -> impl Responder {
-    let ok = {
-        let sessions = data.admin_sessions.lock().unwrap();
-        query.admin_token.as_deref().map(|t| validate_admin_token(&sessions, t)).unwrap_or(false)
-    };
+    let ok = { let s = data.admin_sessions.lock().unwrap(); query.admin_token.as_deref().map(|t| validate_admin_token(&s, t)).unwrap_or(false) };
     if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
 
-    let registry  = data.org_registry.lock().unwrap();
-    let sessions  = data.sessions.lock().unwrap();
-    let tech_sess = data.tech_sessions.lock().unwrap();
+    let orgs     = load_orgs_from_db(&data.db);
+    let sessions = data.sessions.lock().unwrap();
+    let techs    = data.tech_sessions.lock().unwrap();
 
-    let orgs: Vec<serde_json::Value> = registry.values().map(|org| {
-        let session_count = sessions.values().filter(|s| s.org_id == org.org_id).count();
-        let tech_count    = tech_sess.values().filter(|t| t.org_id == org.org_id).count();
+    let list: Vec<serde_json::Value> = orgs.iter().map(|(id, (_, name, is_dl))| {
         serde_json::json!({
-            "org_id":        org.org_id,
-            "display_name":  org.display_name,
-            "created_at":    org.created_at,
-            "is_diesellynk": org.is_diesellynk,
-            "session_count": session_count,
-            "active_techs":  tech_count,
-            "password_set":  !org.password.is_empty(),  // never expose actual password
+            "org_id":        id,
+            "display_name":  name,
+            "is_diesellynk": is_dl,
+            "session_count": sessions.values().filter(|s| &s.org_id == id).count(),
+            "active_techs":  techs.values().filter(|t| &t.org_id == id).count(),
+            "password_set":  true,
         })
     }).collect();
 
-    HttpResponse::Ok().json(orgs)
+    HttpResponse::Ok().json(list)
 }
 
 /// POST /api/admin/orgs/add
@@ -964,10 +1237,7 @@ async fn admin_add_org(
     query: web::Query<AdminAuthQuery>,
     payload: web::Json<AdminAddOrgRequest>,
 ) -> impl Responder {
-    let ok = {
-        let sessions = data.admin_sessions.lock().unwrap();
-        query.admin_token.as_deref().map(|t| validate_admin_token(&sessions, t)).unwrap_or(false)
-    };
+    let ok = { let s = data.admin_sessions.lock().unwrap(); query.admin_token.as_deref().map(|t| validate_admin_token(&s, t)).unwrap_or(false) };
     if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
 
     let org_id = payload.org_id.trim().to_lowercase();
@@ -975,23 +1245,20 @@ async fn admin_add_org(
         return HttpResponse::BadRequest().json(ApiResponse { ok: false, message: "org_id and password required".to_string() });
     }
 
-    let mut registry = data.org_registry.lock().unwrap();
-    if registry.contains_key(&org_id) {
-        return HttpResponse::Conflict().json(ApiResponse { ok: false, message: "Org already exists".to_string() });
+    let conn = data.db.lock().unwrap();
+    match conn.execute(
+        "INSERT INTO orgs (org_id, display_name, password, is_diesellynk, created_at) VALUES (?1,?2,?3,0,?4)",
+        params![org_id, payload.display_name.trim(), payload.password.trim(), now_secs() as i64],
+    ) {
+        Ok(_)  => HttpResponse::Ok().json(ApiResponse { ok: true, message: format!("Org '{}' created", org_id) }),
+        Err(e) => {
+            if e.to_string().contains("UNIQUE") {
+                HttpResponse::Conflict().json(ApiResponse { ok: false, message: "Org already exists".to_string() })
+            } else {
+                HttpResponse::InternalServerError().json(ApiResponse { ok: false, message: e.to_string() })
+            }
+        }
     }
-
-    registry.insert(org_id.clone(), OrgRecord {
-        org_id:        org_id.clone(),
-        password:      payload.password.trim().to_string(),
-        display_name:  payload.display_name.trim().to_string(),
-        created_at:    now_string(),
-        is_diesellynk: false,
-        tech_count:    0,
-        session_count: 0,
-    });
-
-    println!("[Admin] New org added: {}", org_id);
-    HttpResponse::Ok().json(ApiResponse { ok: true, message: format!("Org '{}' created", org_id) })
 }
 
 /// POST /api/admin/orgs/remove
@@ -1001,10 +1268,7 @@ async fn admin_remove_org(
     query: web::Query<AdminAuthQuery>,
     payload: web::Json<AdminRemoveOrgRequest>,
 ) -> impl Responder {
-    let ok = {
-        let sessions = data.admin_sessions.lock().unwrap();
-        query.admin_token.as_deref().map(|t| validate_admin_token(&sessions, t)).unwrap_or(false)
-    };
+    let ok = { let s = data.admin_sessions.lock().unwrap(); query.admin_token.as_deref().map(|t| validate_admin_token(&s, t)).unwrap_or(false) };
     if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
 
     let org_id = payload.org_id.trim().to_lowercase();
@@ -1012,9 +1276,9 @@ async fn admin_remove_org(
         return HttpResponse::BadRequest().json(ApiResponse { ok: false, message: "Cannot remove DieselLynk org".to_string() });
     }
 
-    let mut registry = data.org_registry.lock().unwrap();
-    if registry.remove(&org_id).is_some() {
-        println!("[Admin] Org removed: {}", org_id);
+    let conn = data.db.lock().unwrap();
+    let rows = conn.execute("DELETE FROM orgs WHERE org_id = ?1", params![org_id]).unwrap_or(0);
+    if rows > 0 {
         HttpResponse::Ok().json(ApiResponse { ok: true, message: format!("Org '{}' removed", org_id) })
     } else {
         HttpResponse::NotFound().json(ApiResponse { ok: false, message: "Org not found".to_string() })
@@ -1028,54 +1292,50 @@ async fn admin_reset_password(
     query: web::Query<AdminAuthQuery>,
     payload: web::Json<AdminResetPasswordRequest>,
 ) -> impl Responder {
-    let ok = {
-        let sessions = data.admin_sessions.lock().unwrap();
-        query.admin_token.as_deref().map(|t| validate_admin_token(&sessions, t)).unwrap_or(false)
-    };
+    let ok = { let s = data.admin_sessions.lock().unwrap(); query.admin_token.as_deref().map(|t| validate_admin_token(&s, t)).unwrap_or(false) };
     if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
 
-    let org_id = payload.org_id.trim().to_lowercase();
-    let mut registry = data.org_registry.lock().unwrap();
+    let conn = data.db.lock().unwrap();
+    let rows = conn.execute(
+        "UPDATE orgs SET password = ?1 WHERE org_id = ?2",
+        params![payload.password.trim(), payload.org_id.trim()],
+    ).unwrap_or(0);
 
-    if let Some(org) = registry.get_mut(&org_id) {
-        org.password = payload.password.trim().to_string();
-        println!("[Admin] Password reset for org: {}", org_id);
-        HttpResponse::Ok().json(ApiResponse { ok: true, message: format!("Password updated for '{}'", org_id) })
+    if rows > 0 {
+        HttpResponse::Ok().json(ApiResponse { ok: true, message: format!("Password updated for '{}'", payload.org_id) })
     } else {
         HttpResponse::NotFound().json(ApiResponse { ok: false, message: "Org not found".to_string() })
     }
 }
 
-/// GET /api/admin/sessions — all sessions across all orgs
+/// GET /api/admin/sessions
 #[get("/api/admin/sessions")]
 async fn admin_all_sessions(
     data: web::Data<AppState>,
     query: web::Query<AdminAuthQuery>,
 ) -> impl Responder {
-    let ok = {
-        let admin_sessions = data.admin_sessions.lock().unwrap();
-        query.admin_token.as_deref().map(|t| validate_admin_token(&admin_sessions, t)).unwrap_or(false)
-    };
+    let ok = { let s = data.admin_sessions.lock().unwrap(); query.admin_token.as_deref().map(|t| validate_admin_token(&s, t)).unwrap_or(false) };
     if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
 
     let sessions = data.sessions.lock().unwrap();
 
     #[derive(Serialize)]
-    struct SessionSummary {
+    struct S {
         session_id: String, org_id: String, status: String,
         service_requested: bool, service_type: String,
         nexiq_connected: bool, fault_code_count: usize,
         truck_info: Option<TruckInfo>, service_request_time: String,
-        tablet_ws_url: String,
+        tablet_ws_url: String, connected_tech_count: usize,
     }
 
-    let list: Vec<SessionSummary> = sessions.values().map(|s| SessionSummary {
-        session_id: s.session_id.clone(), org_id: s.org_id.clone(),
-        status: s.status.clone(), service_requested: s.service_requested,
-        service_type: s.service_type.clone(), nexiq_connected: s.nexiq_connected,
-        fault_code_count: s.fault_codes.len(), truck_info: s.truck_info.clone(),
+    let list: Vec<S> = sessions.values().map(|s| S {
+        session_id:           s.session_id.clone(), org_id: s.org_id.clone(),
+        status:               s.status.clone(), service_requested: s.service_requested,
+        service_type:         s.service_type.clone(), nexiq_connected: s.nexiq_connected,
+        fault_code_count:     s.fault_codes.len(), truck_info: s.truck_info.clone(),
         service_request_time: s.service_request_time.clone(),
-        tablet_ws_url: s.tablet_ws_url.clone(),
+        tablet_ws_url:        s.tablet_ws_url.clone(),
+        connected_tech_count: s.connected_techs.len(),
     }).collect();
 
     HttpResponse::Ok().json(list)
@@ -1087,32 +1347,62 @@ async fn admin_stats(
     data: web::Data<AppState>,
     query: web::Query<AdminAuthQuery>,
 ) -> impl Responder {
-    let ok = {
-        let admin_sessions = data.admin_sessions.lock().unwrap();
-        query.admin_token.as_deref().map(|t| validate_admin_token(&admin_sessions, t)).unwrap_or(false)
-    };
+    let ok = { let s = data.admin_sessions.lock().unwrap(); query.admin_token.as_deref().map(|t| validate_admin_token(&s, t)).unwrap_or(false) };
     if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
 
-    let sessions     = data.sessions.lock().unwrap();
-    let tech_sess    = data.tech_sessions.lock().unwrap();
-    let registry     = data.org_registry.lock().unwrap();
-    let history      = data.session_history.lock().unwrap();
+    let sessions  = data.sessions.lock().unwrap();
+    let techs     = data.tech_sessions.lock().unwrap();
+    let orgs      = load_orgs_from_db(&data.db);
 
-    let total_sessions      = sessions.len();
-    let active_techs        = tech_sess.len();
-    let service_requested   = sessions.values().filter(|s| s.service_requested).count();
-    let nexiq_connected     = sessions.values().filter(|s| s.nexiq_connected).count();
-    let total_orgs          = registry.len();
-    let total_history       = history.len();
+    let history_count: i64 = {
+        let conn = data.db.lock().unwrap();
+        conn.query_row("SELECT COUNT(*) FROM session_history", [], |r| r.get(0)).unwrap_or(0)
+    };
 
     HttpResponse::Ok().json(serde_json::json!({
-        "total_sessions":    total_sessions,
-        "active_techs":      active_techs,
-        "service_requested": service_requested,
-        "nexiq_connected":   nexiq_connected,
-        "total_orgs":        total_orgs,
-        "total_history":     total_history,
+        "total_sessions":    sessions.len(),
+        "active_techs":      techs.len(),
+        "service_requested": sessions.values().filter(|s| s.service_requested).count(),
+        "nexiq_connected":   sessions.values().filter(|s| s.nexiq_connected).count(),
+        "total_orgs":        orgs.len(),
+        "total_history":     history_count,
+        "multi_tech_sessions": sessions.values().filter(|s| s.connected_techs.len() > 1).count(),
     }))
+}
+
+/// GET /api/admin/history
+#[get("/api/admin/history")]
+async fn admin_history(
+    data: web::Data<AppState>,
+    query: web::Query<AdminAuthQuery>,
+) -> impl Responder {
+    let ok = { let s = data.admin_sessions.lock().unwrap(); query.admin_token.as_deref().map(|t| validate_admin_token(&s, t)).unwrap_or(false) };
+    if !ok { return HttpResponse::Unauthorized().json(ApiResponse { ok: false, message: "Unauthorized".to_string() }); }
+
+    let conn = data.db.lock().unwrap();
+    let mut stmt = match conn.prepare(
+        "SELECT session_id, org_id, started_at, ended_at, status, service_type, fault_count, truck_info
+         FROM session_history ORDER BY created_at DESC LIMIT 500"
+    ) {
+        Ok(s)  => s,
+        Err(_) => return HttpResponse::Ok().json(Vec::<serde_json::Value>::new()),
+    };
+
+    let rows = stmt.query_map([], |r| {
+        Ok(serde_json::json!({
+            "session_id":   r.get::<_, String>(0)?,
+            "org_id":       r.get::<_, String>(1)?,
+            "started_at":   r.get::<_, String>(2)?,
+            "ended_at":     r.get::<_, String>(3)?,
+            "status":       r.get::<_, String>(4)?,
+            "service_type": r.get::<_, String>(5)?,
+            "fault_count":  r.get::<_, i64>(6)?,
+            "truck_info":   r.get::<_, Option<String>>(7)?,
+        }))
+    }).unwrap_or_else(|_| Vec::new().into_iter().collect());
+
+    let history: Vec<serde_json::Value> = rows.flatten().collect();
+    HttpResponse::Ok().json(history)
 }
 
 /// WebSocket endpoint
@@ -1128,7 +1418,11 @@ async fn ws_route(
     let initial_state = {
         let mut sessions = data.sessions.lock().unwrap();
         let session = sessions.entry(session_id.clone())
-            .or_insert_with(|| default_session(session_id.clone(), org_id));
+            .or_insert_with(|| {
+                let s = default_session(session_id.clone(), org_id.clone());
+                save_session(&data.db, &s);
+                s
+            });
         serialize_session(session)
     };
 
@@ -1139,26 +1433,62 @@ async fn ws_route(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    println!("╔═══════════════════════════════════════╗");
-    println!("║     DieselLynk Server v0.3.0          ║");
-    println!("║     Multi-Tenant Edition              ║");
-    println!("╚═══════════════════════════════════════╝");
+    println!("╔═══════════════════════════════════════════╗");
+    println!("║     DieselLynk Server v0.4.0              ║");
+    println!("║     Phase 2 — Production Ready            ║");
+    println!("╚═══════════════════════════════════════════╝");
 
-    let org_registry = load_org_registry();
-    println!("[Orgs] {} org(s) loaded: {}", org_registry.len(),
-        org_registry.keys().cloned().collect::<Vec<_>>().join(", "));
+    // Open database and load existing sessions back into memory
+    let db = open_db();
+    let sessions_from_db = load_sessions_from_db(&db);
+    println!("[Boot] Loaded {} active sessions from database", sessions_from_db.len());
 
     let (admin_user, _) = get_admin_credentials();
     println!("[Admin] Admin username: {}", admin_user);
 
     let broadcaster = WsBroadcaster::new().start();
     let app_state   = web::Data::new(AppState {
-        sessions:        Mutex::new(HashMap::new()),
-        tech_sessions:   Mutex::new(HashMap::new()),
-        org_registry:    Mutex::new(org_registry),
-        admin_sessions:  Mutex::new(HashMap::new()),
-        session_history: Mutex::new(Vec::new()),
+        db:             db.clone(),
+        sessions:       Mutex::new(sessions_from_db),
+        tech_sessions:  Mutex::new(HashMap::new()),
+        admin_sessions: Mutex::new(HashMap::new()),
+        rate_limiter:   Mutex::new(RateLimiter::new()),
         broadcaster,
+    });
+
+    // Background cleanup task — runs every 5 minutes
+    let db_bg       = db.clone();
+    let state_bg    = app_state.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(300)).await;
+            let cutoff = (now_secs() - 43200) as i64; // 12 hours
+            // Remove expired sessions from memory
+            let mut sessions = state_bg.sessions.lock().unwrap();
+            let expired: Vec<String> = sessions.values()
+                .filter(|s| s.last_activity < now_secs() - 43200)
+                .map(|s| s.session_id.clone())
+                .collect();
+            for id in &expired {
+                println!("[Cleanup] Expiring session: {}", id);
+                sessions.remove(id);
+            }
+            drop(sessions);
+            // Clean expired sessions from DB too
+            if let Ok(conn) = db_bg.lock() {
+                conn.execute("DELETE FROM sessions WHERE last_activity < ?1", params![cutoff]).ok();
+                conn.execute("DELETE FROM rate_limits WHERE window_start < ?1", params![(now_secs() - 3600) as i64]).ok();
+            }
+            // Clean rate limiter buckets
+            state_bg.rate_limiter.lock().unwrap().cleanup();
+            // Clean expired tech sessions from memory
+            let mut tech_sessions = state_bg.tech_sessions.lock().unwrap();
+            tech_sessions.retain(|_, t| now_secs() - t.last_seen < 28800); // 8h
+            drop(tech_sessions);
+            // Clean expired admin sessions
+            let mut admin_sessions = state_bg.admin_sessions.lock().unwrap();
+            admin_sessions.retain(|_, a| now_secs() - a.created_at < 86400); // 24h
+        }
     });
 
     let port = get_port();
@@ -1167,6 +1497,13 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
+            .app_data(web::JsonConfig::default().error_handler(|err, _| {
+                let msg = format!("Invalid JSON: {}", err);
+                actix_web::error::InternalError::from_response(
+                    err,
+                    HttpResponse::BadRequest().json(ApiResponse { ok: false, message: msg }),
+                ).into()
+            }))
             // Admin
             .service(admin_login)
             .service(admin_get_orgs)
@@ -1175,18 +1512,25 @@ async fn main() -> std::io::Result<()> {
             .service(admin_reset_password)
             .service(admin_all_sessions)
             .service(admin_stats)
-            // Tech auth
+            .service(admin_history)
+            // Tech
             .service(tech_login)
-            .service(tablet_register)
+            .service(tech_join)
+            .service(active_sessions)
+            // Session
             .service(create_session)
             .service(get_session)
-            .service(active_sessions)
             .service(update_session)
-            .service(tech_join)
+            // Driver
             .service(customer_reply)
             .service(service_request)
+            .service(manual_truck_info)
+            // Nexiq agent
             .service(nexiq_status)
+            .service(tablet_register)
+            // WebSocket
             .route("/ws", web::get().to(ws_route))
+            // Static files
             .service(Files::new("/", "./static").index_file("index.html"))
     })
     .bind(format!("0.0.0.0:{}", port))?

@@ -252,17 +252,78 @@
       <div class="reply-note" id="reply-note"></div>
     </div>
 
-    <!-- ── SERVICE REQUEST BUTTON ──────────────────────────── -->
+    <!-- ── SERVICE REQUEST ───────────────────────────────── -->
     <div class="service-request-wrap">
+
+      <!-- Service type selector — only shown if fleet has own techs -->
+      <div id="service-type-selector" style="display:none;margin-bottom:12px;">
+        <div style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.2em;color:var(--titanium);margin-bottom:10px;text-align:center;">SELECT SERVICE TYPE</div>
+        <div style="display:flex;gap:10px;">
+          <button id="btn-own-tech" onclick="selectServiceType('own_tech')"
+            style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--steel);background:rgba(26,26,26,.8);
+            font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--titanium);cursor:pointer;transition:all .2s;">
+            🔧 Our Technician
+          </button>
+          <button id="btn-dl-tech" onclick="selectServiceType('diesellynk_tech')"
+            style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--steel);background:rgba(26,26,26,.8);
+            font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--titanium);cursor:pointer;transition:all .2s;">
+            ⚡ DieselLynk Tech
+          </button>
+        </div>
+      </div>
+
       <button class="service-request-btn" id="service-request-btn" onclick="requestService()">
         <div class="srv-btn-inner">
           <span class="srv-btn-icon">🛠</span>
           <div class="srv-btn-text">
             <div class="srv-btn-title">Request Technician</div>
-            <span class="srv-btn-sub">Connect me to a DieselLynk tech now</span>
+            <span class="srv-btn-sub" id="srv-btn-sub-text">Tap to connect with a technician</span>
           </div>
-          <span class="srv-btn-icon">→</span>
         </div>
+      </button>
+    </div>
+
+    <!-- ── MANUAL TRUCK INFO ──────────────────────────────── -->
+    <div class="service-request-wrap" id="manual-truck-wrap" style="margin-top:0;">
+      <div style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.18em;color:var(--titanium);margin-bottom:10px;text-align:center;">NO ADAPTER? ENTER TRUCK INFO MANUALLY</div>
+      <div id="manual-truck-form" style="background:rgba(26,26,26,.85);border:1px solid var(--steel);border-radius:12px;padding:18px;display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.16em;color:var(--titanium);margin-bottom:5px;">YEAR</div>
+            <input type="number" id="truck-year" placeholder="2023" min="1990" max="2030"
+              style="width:100%;background:rgba(0,0,0,.4);border:1px solid var(--steel);border-radius:6px;padding:8px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;color:var(--text-primary);outline:none;"/>
+          </div>
+          <div>
+            <div style="font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.16em;color:var(--titanium);margin-bottom:5px;">MAKE</div>
+            <input type="text" id="truck-make" placeholder="Freightliner"
+              style="width:100%;background:rgba(0,0,0,.4);border:1px solid var(--steel);border-radius:6px;padding:8px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;color:var(--text-primary);outline:none;"/>
+          </div>
+          <div>
+            <div style="font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.16em;color:var(--titanium);margin-bottom:5px;">MODEL</div>
+            <input type="text" id="truck-model" placeholder="Cascadia"
+              style="width:100%;background:rgba(0,0,0,.4);border:1px solid var(--steel);border-radius:6px;padding:8px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;color:var(--text-primary);outline:none;"/>
+          </div>
+          <div>
+            <div style="font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.16em;color:var(--titanium);margin-bottom:5px;">ENGINE</div>
+            <input type="text" id="truck-engine" placeholder="DD15"
+              style="width:100%;background:rgba(0,0,0,.4);border:1px solid var(--steel);border-radius:6px;padding:8px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;color:var(--text-primary);outline:none;"/>
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.16em;color:var(--titanium);margin-bottom:5px;">VIN (optional)</div>
+          <input type="text" id="truck-vin" placeholder="1FUJGBDV3CLBP8765" maxlength="17"
+            style="width:100%;background:rgba(0,0,0,.4);border:1px solid var(--steel);border-radius:6px;padding:8px 10px;font-family:'Rajdhani',sans-serif;font-size:14px;color:var(--text-primary);outline:none;text-transform:uppercase;"/>
+        </div>
+        <button onclick="submitTruckInfo()"
+          style="width:100%;padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--gold-dim),var(--gold));
+          font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:.12em;color:#0A0A0A;cursor:pointer;">
+          Save Truck Info
+        </button>
+      </div>
+      <button onclick="toggleManualForm()"
+        style="width:100%;padding:10px;border:1px solid var(--steel);border-radius:10px;background:transparent;
+        font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.12em;color:var(--titanium);cursor:pointer;">
+        + Enter Truck Info Manually
       </button>
     </div>
 
@@ -524,21 +585,83 @@
       `).join('');
     }
 
+    // ── SERVICE TYPE SELECTOR ─────────────────────────────────
+    // Determine if this org has own techs (not unknown/diesellynk)
+    const hasOwnTechs = orgId && orgId !== 'unknown' && orgId !== 'diesellynk';
+    let selectedServiceType = hasOwnTechs ? 'own_tech' : 'diesellynk_tech';
+
+    function initServiceTypeSelector() {
+      if (hasOwnTechs) {
+        document.getElementById('service-type-selector').style.display = 'block';
+        selectServiceType('own_tech'); // default to own tech for fleet clients
+      } else {
+        document.getElementById('srv-btn-sub-text').textContent = 'Connect with a DieselLynk technician';
+      }
+    }
+
+    function selectServiceType(type) {
+      selectedServiceType = type;
+      const btnOwn = document.getElementById('btn-own-tech');
+      const btnDL  = document.getElementById('btn-dl-tech');
+      const sub    = document.getElementById('srv-btn-sub-text');
+      if (type === 'own_tech') {
+        btnOwn.style.borderColor = 'var(--gold)';
+        btnOwn.style.color       = 'var(--gold)';
+        btnOwn.style.background  = 'rgba(212,175,55,.1)';
+        btnDL.style.borderColor  = 'var(--steel)';
+        btnDL.style.color        = 'var(--titanium)';
+        btnDL.style.background   = 'rgba(26,26,26,.8)';
+        sub.textContent = 'Connect with your fleet\'s technician';
+      } else {
+        btnDL.style.borderColor  = 'var(--gold)';
+        btnDL.style.color        = 'var(--gold)';
+        btnDL.style.background   = 'rgba(212,175,55,.1)';
+        btnOwn.style.borderColor = 'var(--steel)';
+        btnOwn.style.color       = 'var(--titanium)';
+        btnOwn.style.background  = 'rgba(26,26,26,.8)';
+        sub.textContent = 'Connect with a DieselLynk technician';
+      }
+    }
+
+    // ── MANUAL TRUCK INFO ─────────────────────────────────────
+    function toggleManualForm() {
+      const form = document.getElementById('manual-truck-form');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function submitTruckInfo() {
+      const year   = parseInt(document.getElementById('truck-year').value);
+      const make   = document.getElementById('truck-make').value.trim();
+      const model  = document.getElementById('truck-model').value.trim();
+      const engine = document.getElementById('truck-engine').value.trim();
+      const vin    = document.getElementById('truck-vin').value.trim().toUpperCase() || 'MANUAL-ENTRY';
+
+      if (!year || !make || !model || !engine) {
+        alert('Please fill in Year, Make, Model, and Engine.');
+        return;
+      }
+
+      try {
+        await fetch(`/api/manual-truck-info/${encodeURIComponent(sessionId)}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ driver_token: driverToken, vin, make, model, year, engine, odometer: null })
+        });
+        document.getElementById('manual-truck-form').style.display = 'none';
+      } catch(e) {}
+    }
+
     // ── SERVICE REQUEST ───────────────────────────────────────
     async function requestService() {
       if (serviceRequested) return;
       const btn = document.getElementById('service-request-btn');
       btn.style.opacity = '.6';
-      btn.style.cursor = 'wait';
+      btn.style.cursor  = 'wait';
       try {
         await fetch(`/api/service-request/${encodeURIComponent(sessionId)}`, {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({
-            driver_token: driverToken,
-            // own_tech if fleet org, diesellynk_tech if no org or unknown
-            service_type: (orgId && orgId !== 'unknown') ? 'own_tech' : 'diesellynk_tech'
-          })
+          body: JSON.stringify({ driver_token: driverToken, service_type: selectedServiceType })
         });
       } catch(e) {}
       markServiceSent();
@@ -606,6 +729,7 @@
     }
 
     // ── BOOT ──────────────────────────────────────────────────
+    initServiceTypeSelector();
     initSession();
   </script>
 </body>

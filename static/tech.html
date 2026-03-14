@@ -535,6 +535,7 @@
           <div class="si-top"><span class="si-id">${s.session_id}</span>${badge}</div>
           <div class="si-truck">${truck}</div>
           <div class="si-nexiq">${s.nexiq_connected ? '● ' + (s.adapter_name || 'Adapter Online') : '○ Adapter Offline'}</div>
+          ${s.connected_tech_count > 0 ? `<div style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--info-blue);margin-top:3px;">👥 ${s.connected_tech_count} tech${s.connected_tech_count > 1 ? 's' : ''} connected</div>` : ''}
           ${faults}
           ${connectBtn}
         </div>`;
