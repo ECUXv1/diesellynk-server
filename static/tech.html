@@ -463,13 +463,15 @@
 
   // ── SESSION UI ─────────────────────────────────────────────
   function updateSessionUI() {
-    document.getElementById('active-session-id').textContent = sessionId;
-    const customerUrl = `${location.origin}/index.html?session=${encodeURIComponent(sessionId)}`;
+    document.getElementById('active-session-id').textContent = sessionId || '— None —';
+    const customerUrl = `${location.origin}/index.html?session=${encodeURIComponent(sessionId)}&org=${encodeURIComponent(techOrgId)}`;
     const linkEl = document.getElementById('customer-session-link');
-    linkEl.textContent = customerUrl;
-    linkEl.href = customerUrl;
+    if (linkEl) { linkEl.textContent = customerUrl; linkEl.href = customerUrl; }
     document.getElementById('customer-link-row').classList.add('show');
-    try { history.replaceState(null, '', `${location.pathname}?session=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(techToken)}`); } catch(e) {}
+    // Only update URL if we have a real session
+    if (sessionId) {
+      try { history.replaceState(null, '', `${location.pathname}?session=${encodeURIComponent(sessionId)}`); } catch(e) {}
+    }
   }
 
   async function createSession() {
@@ -813,12 +815,18 @@
   const orgBadge = document.getElementById('org-badge');
   if (orgBadge) orgBadge.textContent = isDieselLynk ? '⚡ DieselLynk Tech' : `Org: ${techOrgId}`;
 
-  updateSessionUI();
-  fetch(`/api/session/${encodeURIComponent(sessionId)}`)
-    .then(r => r.json())
-    .then(applySessionData)
-    .catch(()=>{})
-    .finally(()=> connectWs());
+  // Only connect to a session if we have one in the URL
+  if (sessionId) {
+    updateSessionUI();
+    fetch(`/api/session/${encodeURIComponent(sessionId)}`)
+      .then(r => r.json())
+      .then(applySessionData)
+      .catch(()=>{})
+      .finally(()=> connectWs());
+  } else {
+    // No session yet — just show the queue, wait for tech to click Connect
+    document.getElementById('active-session-id').textContent = '— None —';
+  }
 
   refreshSessions();
 </script>
