@@ -1409,9 +1409,12 @@ async fn admin_history(
             "fault_count":  r.get::<_, i64>(6)?,
             "truck_info":   r.get::<_, Option<String>>(7)?,
         }))
-    }).unwrap_or_else(|_| Vec::new().into_iter().collect());
+    });
 
-    let history: Vec<serde_json::Value> = rows.flatten().collect();
+    let history: Vec<serde_json::Value> = match rows {
+        Ok(mapped) => mapped.flatten().collect(),
+        Err(_)     => Vec::new(),
+    };
     HttpResponse::Ok().json(history)
 }
 
@@ -1469,9 +1472,9 @@ async fn main() -> std::io::Result<()> {
     // Background cleanup task — runs every 5 minutes using actix_rt
     let db_bg    = db.clone();
     let state_bg = app_state.clone();
-    actix_rt::spawn(async move {
+    actix_web::rt::spawn(async move {
         loop {
-            actix_rt::time::sleep(Duration::from_secs(300)).await;
+            actix_web::rt::time::sleep(Duration::from_secs(300)).await;
             let cutoff = (now_secs() - 43200) as i64; // 12 hours
             // Remove expired sessions from memory
             let mut sessions = state_bg.sessions.lock().unwrap();
