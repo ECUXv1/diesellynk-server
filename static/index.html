@@ -326,6 +326,9 @@
     // ── SESSION INIT ──────────────────────────────────────────
     // Driver flow: auto-create session on first load, persist tokens
     const params = new URLSearchParams(location.search);
+    const orgId  = params.get('org') || localStorage.getItem('dl_org_id') || 'unknown';
+    if (orgId !== 'unknown') localStorage.setItem('dl_org_id', orgId);
+
     let sessionId   = params.get('session') || localStorage.getItem('dl_session_id') || '';
     let driverToken = params.get('token')   || localStorage.getItem('dl_driver_token') || '';
 
@@ -344,7 +347,6 @@
     }
 
     async function createNewSession() {
-      const orgId = params.get('org') || localStorage.getItem('dl_org_id') || 'unknown';
       try {
         const res  = await fetch('/api/create-session', {
           method:'POST', headers:{'Content-Type':'application/json'},
