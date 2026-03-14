@@ -159,27 +159,41 @@
 
     /* REMOTE DESKTOP */
     .remote-desktop-wrap{margin-bottom:28px;animation:cardUp .6s .3s cubic-bezier(.22,1,.36,1) both;}
-    .remote-desktop-card{background:var(--carbon);border:1px solid var(--steel);border-radius:12px;overflow:hidden;}
-    .remote-desktop-bar{display:flex;align-items:center;gap:10px;padding:11px 18px;background:rgba(0,0,0,.35);border-bottom:1px solid var(--steel);}
+    .remote-desktop-card{background:#0a0a0a;border:1px solid var(--steel);border-radius:12px;overflow:hidden;}
+    .remote-desktop-bar{display:flex;align-items:center;gap:10px;padding:11px 18px;background:rgba(0,0,0,.6);border-bottom:1px solid var(--steel);flex-wrap:wrap;}
     .remote-desktop-title{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-dim);}
     .rdp-status{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.12em;padding:3px 10px;border-radius:10px;margin-left:auto;}
     .rdp-status.offline{background:rgba(58,58,58,.3);color:var(--titanium);border:1px solid var(--steel);}
     .rdp-status.connecting{background:rgba(243,156,18,.1);color:var(--warn-orange);border:1px solid rgba(243,156,18,.3);animation:pulse 1s infinite;}
     .rdp-status.live{background:rgba(88,214,141,.1);color:var(--ack-yes);border:1px solid rgba(88,214,141,.3);}
-    .remote-desktop-body{position:relative;background:#000;min-height:420px;display:flex;align-items:center;justify-content:center;}
-    .rdp-placeholder{text-align:center;color:var(--titanium);}
-    .rdp-placeholder-icon{font-size:48px;margin-bottom:16px;opacity:.3;}
-    .rdp-placeholder-text{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.18em;color:var(--titanium);}
-    .rdp-placeholder-sub{font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--steel);margin-top:8px;}
-    #rdp-iframe{width:100%;height:520px;border:none;display:none;}
-    .rdp-controls{display:flex;gap:8px;padding:10px 18px;background:rgba(0,0,0,.3);border-top:1px solid var(--steel);flex-wrap:wrap;align-items:center;}
-    .rdp-ctrl-btn{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:6px 14px;border:1px solid var(--steel);border-radius:6px;background:transparent;color:var(--titanium);cursor:pointer;transition:all .2s;}
+    /* Large resizable remote view — tech can drag to resize */
+    .remote-desktop-body{
+      position:relative;background:#000;
+      height:75vh;min-height:600px;
+      display:flex;align-items:stretch;justify-content:center;
+      overflow:hidden;
+      resize:vertical;  /* tech can drag bottom edge to resize */
+    }
+    .rdp-placeholder{text-align:center;color:var(--titanium);align-self:center;width:100%;}
+    .rdp-placeholder-icon{font-size:56px;margin-bottom:18px;opacity:.2;}
+    .rdp-placeholder-text{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.2em;color:var(--titanium);}
+    .rdp-placeholder-sub{font-family:'Rajdhani',sans-serif;font-size:14px;color:var(--steel);margin-top:10px;}
+    /* iframe fills the entire remote desktop body */
+    #rdp-iframe{
+      width:100%;height:100%;
+      border:none;display:none;
+      background:#000;
+    }
+    .rdp-controls{display:flex;gap:8px;padding:12px 18px;background:rgba(0,0,0,.5);border-top:1px solid var(--steel);flex-wrap:wrap;align-items:center;}
+    .rdp-ctrl-btn{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:7px 16px;border:1px solid var(--steel);border-radius:6px;background:transparent;color:var(--titanium);cursor:pointer;transition:all .2s;white-space:nowrap;}
     .rdp-ctrl-btn:hover{border-color:var(--gold-dim);color:var(--gold);}
     .rdp-ctrl-btn.primary{border-color:rgba(88,214,141,.4);color:var(--ack-yes);background:rgba(88,214,141,.06);}
-    .rdp-ctrl-btn.primary:hover{background:rgba(88,214,141,.12);}
-    .rdp-url-input{flex:1;background:rgba(0,0,0,.4);border:1px solid var(--steel);border-radius:6px;padding:6px 12px;font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--text-primary);outline:none;min-width:200px;}
+    .rdp-ctrl-btn.primary:hover{background:rgba(88,214,141,.15);box-shadow:0 0 14px rgba(88,214,141,.15);}
+    .rdp-ctrl-btn.danger{border-color:rgba(192,57,43,.4);color:var(--ack-no);}
+    .rdp-url-input{flex:1;background:rgba(0,0,0,.4);border:1px solid var(--steel);border-radius:6px;padding:7px 12px;font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--text-primary);outline:none;min-width:180px;}
     .rdp-url-input:focus{border-color:var(--gold-dim);}
     .rdp-url-input::placeholder{color:var(--steel);}
+    .rdp-resize-hint{font-family:'Rajdhani',sans-serif;font-size:11px;color:var(--steel);margin-left:auto;white-space:nowrap;}
 
     /* MONITOR */
     .monitor{background:var(--carbon);border:1px solid var(--steel);border-radius:12px;overflow:hidden;animation:cardUp .6s .42s cubic-bezier(.22,1,.36,1) both;margin-bottom:28px;}
@@ -372,10 +386,12 @@
         <iframe id="rdp-iframe" allowfullscreen></iframe>
       </div>
       <div class="rdp-controls">
-        <input type="text" class="rdp-url-input" id="rdp-url-input" placeholder="Tablet WebSocket URL — auto-filled when tablet connects"/>
-        <button class="rdp-ctrl-btn primary" onclick="connectRdp()">⚡ Connect Desktop</button>
-        <button class="rdp-ctrl-btn" onclick="disconnectRdp()">Disconnect</button>
-        <button class="rdp-ctrl-btn" onclick="document.getElementById('rdp-iframe').requestFullscreen()">Fullscreen</button>
+        <input type="text" class="rdp-url-input" id="rdp-url-input" placeholder="Tablet tunnel URL — auto-filled when tablet connects"/>
+        <button class="rdp-ctrl-btn primary" onclick="connectRdp()">⚡ Connect</button>
+        <button class="rdp-ctrl-btn danger" onclick="disconnectRdp()">⛔ Disconnect</button>
+        <button class="rdp-ctrl-btn" onclick="document.getElementById('rdp-iframe').requestFullscreen()">⛶ Fullscreen</button>
+        <button class="rdp-ctrl-btn" onclick="toggleRdpSize()">⤢ Expand</button>
+        <span class="rdp-resize-hint">↕ Drag bottom edge to resize</span>
       </div>
     </div>
   </div>
@@ -708,6 +724,18 @@
 
     lastStatus = d.status; lastCommand = d.command;
     lastAck = d.customer_ack; lastMsg = d.customer_message;
+  }
+
+  function toggleRdpSize() {
+    const body = document.querySelector('.remote-desktop-body');
+    const btn  = event.target;
+    if (body.style.height === '95vh') {
+      body.style.height = '75vh';
+      btn.textContent = '⤢ Expand';
+    } else {
+      body.style.height = '95vh';
+      btn.textContent = '⤡ Shrink';
+    }
   }
 
   // ── REMOTE DESKTOP ─────────────────────────────────────────

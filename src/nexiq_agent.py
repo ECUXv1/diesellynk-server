@@ -87,27 +87,59 @@ FMI_DESCRIPTIONS = {
 class RP1210:
     """
     Minimal RP1210 API wrapper.
-    Loads the vendor DLL (Nexiq, DG Tech, etc.) and provides
-    connect/disconnect/read/write primitives.
+    Auto-detects connected Nexiq adapter by trying known DLLs in order:
+      1. NULN2032  — Nexiq USB Link 2
+      2. NULN2R32  — Nexiq Mini Blue 2
+      3. NEXIQ32   — Nexiq legacy adapters
+    Falls back to demo mode if none found.
     """
 
-    def __init__(self, dll_name: str = "NULN2R32"):
+    # All known Nexiq DLL names in priority order
+    KNOWN_DLLS = [
+        ("NULN2032",  "Nexiq USB Link 2"),
+        ("NULN2R32",  "Nexiq Mini Blue 2"),
+        ("NEXIQ32",   "Nexiq Legacy"),
+        ("DGDPA5MA",  "DG Tech DPA 5 Multi-Application"),
+    ]
+
+    def __init__(self, dll_name: str = None):
         """
-        dll_name: RP1210 DLL name from vendor ini
-        Nexiq Mini Blue 2 uses 'NULN2R32'
+        dll_name: force a specific DLL (optional)
+        If None, auto-detects by trying all known DLLs.
         """
         self.dll = None
         self.client_id = -1
         self.dll_name = dll_name
-        self._load_dll()
+        self.adapter_name = "Unknown"
 
-    def _load_dll(self):
+        if dll_name:
+            # Force specific DLL
+            self._load_dll(dll_name)
+        else:
+            # Auto-detect
+            self._auto_detect()
+
+    def _load_dll(self, dll_name: str) -> bool:
         try:
-            self.dll = ctypes.windll.LoadLibrary(self.dll_name)
-            print(f"[RP1210] Loaded {self.dll_name}.dll")
+            self.dll = ctypes.windll.LoadLibrary(dll_name)
+            self.dll_name = dll_name
+            print(f"[RP1210] Loaded {dll_name}.dll")
+            return True
         except Exception as e:
-            print(f"[RP1210] Could not load {self.dll_name}: {e}")
+            print(f"[RP1210] Could not load {dll_name}: {e}")
             self.dll = None
+            return False
+
+    def _auto_detect(self):
+        """Try each known DLL until one loads successfully"""
+        print("[RP1210] Auto-detecting Nexiq adapter...")
+        for dll_name, friendly_name in self.KNOWN_DLLS:
+            if self._load_dll(dll_name):
+                self.adapter_name = friendly_name
+                print(f"[RP1210] Detected: {friendly_name} ({dll_name})")
+                return
+        print("[RP1210] No Nexiq adapter found — will run in demo mode")
+        self.adapter_name = "Demo Mode"
 
     @property
     def available(self) -> bool:
@@ -283,28 +315,30 @@ def request_vin_from_adapter() -> str:
 # ── DIESELLYNK AGENT ──────────────────────────────────────────────────────────
 
 class DieselLynkAgent:
-    def __init__(self, session_id: str, driver_token: str, server_url: str):
-        self.session_id = session_id
+    def __init__(self, session_id: str, driver_token: str, server_url: str, dll_name: str = None):
+        self.session_id   = session_id
         self.driver_token = driver_token
-        self.server_url = server_url.rstrip("/")
-        self.rp1210 = RP1210()
-        self.connected = False
-        self.fault_codes = []
-        self.live_data = {}
-        self.truck_info = None
-        self.last_post_time = 0
-        self.post_interval = 2.0  # post every 2 seconds
+        self.server_url   = server_url.rstrip("/")
+        self.rp1210       = RP1210(dll_name=dll_name)  # None = auto-detect
+        self.connected    = False
+        self.fault_codes  = []
+        self.live_data    = {}
+        self.truck_info   = None
+        self.last_post_time  = 0
+        self.post_interval   = 2.0
 
     def connect_adapter(self) -> bool:
-        """Try to connect to Nexiq Mini Blue 2"""
+        """Try to connect to whichever Nexiq adapter was detected"""
         if not self.rp1210.available:
-            print("[Agent] RP1210 DLL not available — running in demo mode")
+            print("[Agent] No RP1210 adapter available — running in demo mode")
             return False
 
         success = self.rp1210.connect(device_id=1, protocol="J1939")
         if success:
             self.connected = True
-            print("[Agent] Nexiq Mini Blue 2 connected")
+            print(f"[Agent] {self.rp1210.adapter_name} connected successfully")
+        else:
+            print(f"[Agent] {self.rp1210.adapter_name} found but connect failed — check cable/truck power")
         return success
 
     def read_messages(self, duration_ms: int = 500):
@@ -378,7 +412,7 @@ class DieselLynkAgent:
         payload = {
             "driver_token": self.driver_token,
             "connected": self.connected,
-            "adapter_name": "Nexiq Mini Blue 2" if self.connected else "",
+            "adapter_name": self.rp1210.adapter_name if self.connected else "",
             "fault_codes": self.fault_codes,
             "live_data": self.live_data if self.live_data else None,
             "truck_info": self.truck_info,
@@ -492,13 +526,15 @@ class DieselLynkAgent:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DieselLynk Nexiq Agent")
     parser.add_argument("--session", required=True, help="Session ID (e.g. DL-XXXX)")
-    parser.add_argument("--token", required=True, help="Driver token from session creation")
-    parser.add_argument("--server", default="http://localhost:8080", help="DieselLynk server URL")
+    parser.add_argument("--token",   required=True, help="Driver token from session creation")
+    parser.add_argument("--server",  default="http://localhost:8080", help="DieselLynk server URL")
+    parser.add_argument("--dll",     default=None, help="Force specific RP1210 DLL (e.g. NULN2032). Default: auto-detect")
     args = parser.parse_args()
 
     agent = DieselLynkAgent(
-        session_id=args.session,
-        driver_token=args.token,
-        server_url=args.server
+        session_id   = args.session,
+        driver_token = args.token,
+        server_url   = args.server,
+        dll_name     = args.dll,
     )
     agent.run()
