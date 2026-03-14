@@ -450,7 +450,7 @@ async fn update_session(
     };
 
     data.broadcaster.do_send(Broadcast {
-        room: session_id,
+        room: session_id.clone(),
         message: json_to_broadcast,
     });
 
@@ -500,7 +500,7 @@ async fn customer_reply(
     };
 
     data.broadcaster.do_send(Broadcast {
-        room: session_id,
+        room: session_id.clone(),
         message: json_to_broadcast,
     });
 
@@ -547,7 +547,7 @@ async fn service_request(
     };
 
     data.broadcaster.do_send(Broadcast {
-        room: session_id,
+        room: session_id.clone(),
         message: json_to_broadcast,
     });
 
@@ -620,7 +620,7 @@ async fn nexiq_status(
     };
 
     data.broadcaster.do_send(Broadcast {
-        room: session_id,
+        room: session_id.clone(),
         message: json_to_broadcast,
     });
 
