@@ -340,10 +340,11 @@
           .then(r => r.ok ? r.json() : Promise.reject())
           .then(applySessionData)
           .catch(() => createNewSession()) // session gone (server restart), make new one
-          .finally(() => connectWs());
+          .then(() => connectWs());        // only connect ONCE after all init is done
         return;
       }
       await createNewSession();
+      connectWs();
     }
 
     async function createNewSession() {
@@ -358,7 +359,7 @@
         localStorage.setItem('dl_session_id',    sessionId);
         localStorage.setItem('dl_driver_token',  driverToken);
         document.getElementById('session-pill-label').textContent = sessionId;
-        connectWs();
+        // connectWs called by initSession after this resolves
       } catch(e) {
         document.getElementById('session-pill-label').textContent = 'Error';
       }
@@ -484,7 +485,7 @@
       panel.classList.remove('hidden');
       const gauges = [
         { key:'engine_rpm',    label:'Engine RPM', unit:'RPM',  fmt: v => Math.round(v).toLocaleString() },
-        { key:'vehicle_speed', label:'Speed',      unit:'km/h', fmt: v => v.toFixed(1) },
+        { key:'vehicle_speed', label:'Speed',      unit:'MPH',  fmt: v => (v * 0.621371).toFixed(1) },
         { key:'coolant_temp',  label:'Coolant',    unit:'°C',   fmt: v => v.toFixed(0) },
         { key:'oil_pressure',  label:'Oil Press',  unit:'kPa',  fmt: v => v.toFixed(0) },
         { key:'boost_pressure',label:'Boost',      unit:'kPa',  fmt: v => v.toFixed(0) },
@@ -533,7 +534,11 @@
         await fetch(`/api/service-request/${encodeURIComponent(sessionId)}`, {
           method: 'POST',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ driver_token: driverToken, service_type: 'diesellynk_tech' })
+          body: JSON.stringify({
+            driver_token: driverToken,
+            // own_tech if fleet org, diesellynk_tech if no org or unknown
+            service_type: (orgId && orgId !== 'unknown') ? 'own_tech' : 'diesellynk_tech'
+          })
         });
       } catch(e) {}
       markServiceSent();

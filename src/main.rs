@@ -88,8 +88,38 @@ fn get_admin_credentials() -> (String, String) {
     (username, password)
 }
 
+fn get_port() -> u16 {
+    std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8080)
+}
+
+// Expire admin tokens older than 24 hours
+fn is_admin_token_valid(session: &AdminSession) -> bool {
+    let created: u64 = session.created_at.parse().unwrap_or(0);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    now.saturating_sub(created) < 86400 // 24 hours
+}
+
 fn validate_admin_token(admin_sessions: &HashMap<String, AdminSession>, token: &str) -> bool {
-    admin_sessions.contains_key(token)
+    admin_sessions.get(token).map(|s| is_admin_token_valid(s)).unwrap_or(false)
+}
+
+// Expire sessions older than 12 hours with no activity
+fn should_expire_session(session: &SessionState) -> bool {
+    if session.event_log.is_empty() { return false; }
+    let last_ts: u64 = session.event_log.last()
+        .and_then(|e| e.timestamp.parse().ok())
+        .unwrap_or(0);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    now.saturating_sub(last_ts) > 43200 // 12 hours
 }
 
 // ── DATA STRUCTURES ───────────────────────────────────────────────────────────
@@ -657,13 +687,18 @@ async fn active_sessions(
         service_requested: bool, service_type: String,
         nexiq_connected: bool, fault_code_count: usize,
         truck_info: Option<TruckInfo>, service_request_time: String,
+        adapter_name: String,
     }
 
     let summaries: Vec<SessionSummary> = sessions.values()
         .filter(|s| {
             if tech_sess.is_diesellynk {
-                s.service_type == "diesellynk_tech" || (s.service_requested && s.org_id == "diesellynk")
+                // DieselLynk techs see:
+                // 1. Any session that requested diesellynk_tech service
+                // 2. All sessions in the diesellynk org itself
+                s.service_type == "diesellynk_tech" || s.org_id == "diesellynk"
             } else {
+                // Fleet techs see only their own org's sessions
                 s.org_id == tech_sess.org_id
             }
         })
@@ -673,6 +708,7 @@ async fn active_sessions(
             service_type: s.service_type.clone(), nexiq_connected: s.nexiq_connected,
             fault_code_count: s.fault_codes.len(), truck_info: s.truck_info.clone(),
             service_request_time: s.service_request_time.clone(),
+            adapter_name: s.adapter_name.clone(),
         })
         .collect();
 
@@ -716,6 +752,38 @@ async fn update_session(
         push_event(session, "tech_command", format!("Tech: '{}' | {}", session.command, session.priority));
         serialize_session(session)
     };
+
+    // Write to session history on disconnect
+    if payload.status == "Technician Disconnected" || payload.status == "Session Complete" {
+        let sessions = data.sessions.lock().unwrap();
+        if let Some(s) = sessions.get(&session_id) {
+            let entry = SessionHistoryEntry {
+                session_id:   s.session_id.clone(),
+                org_id:       s.org_id.clone(),
+                started_at:   s.event_log.first().map(|e| e.timestamp.clone()).unwrap_or_default(),
+                ended_at:     now_string(),
+                status:       payload.status.clone(),
+                service_type: s.service_type.clone(),
+                fault_count:  s.fault_codes.len(),
+                truck_info:   s.truck_info.clone(),
+            };
+            drop(sessions);
+            data.session_history.lock().unwrap().push(entry);
+        }
+    }
+
+    // Clean up expired sessions periodically
+    {
+        let mut sessions = data.sessions.lock().unwrap();
+        let expired: Vec<String> = sessions.values()
+            .filter(|s| should_expire_session(s))
+            .map(|s| s.session_id.clone())
+            .collect();
+        for id in expired {
+            println!("[Cleanup] Expiring stale session: {}", id);
+            sessions.remove(&id);
+        }
+    }
 
     data.broadcaster.do_send(Broadcast { room: session_id.clone(), message: json_to_broadcast });
     HttpResponse::Ok().json(ApiResponse { ok: true, message: "Updated".to_string() })
@@ -882,6 +950,7 @@ async fn admin_get_orgs(
             "is_diesellynk": org.is_diesellynk,
             "session_count": session_count,
             "active_techs":  tech_count,
+            "password_set":  !org.password.is_empty(),  // never expose actual password
         })
     }).collect();
 
@@ -1092,6 +1161,9 @@ async fn main() -> std::io::Result<()> {
         broadcaster,
     });
 
+    let port = get_port();
+    println!("[Server] Binding on port {}", port);
+
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
@@ -1117,7 +1189,7 @@ async fn main() -> std::io::Result<()> {
             .route("/ws", web::get().to(ws_route))
             .service(Files::new("/", "./static").index_file("index.html"))
     })
-    .bind(("0.0.0.0", 8080))?
+    .bind(format!("0.0.0.0:{}", port))?
     .run()
     .await
 }

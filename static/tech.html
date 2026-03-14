@@ -269,9 +269,8 @@
     <div class="session-card-header">
       <div class="session-card-title">Active Session</div>
       <div class="session-actions">
-        <button class="sess-btn sess-btn-new" onclick="createSession()">+ New Session</button>
-        <button class="sess-btn sess-btn-copy" onclick="copyCustomerLink()">Copy Customer Link</button>
-        <button class="sess-btn sess-btn-open" onclick="openCustomerLink()">Open Customer View</button>
+        <button class="sess-btn sess-btn-copy" onclick="copyCustomerLink()">Copy Driver Link</button>
+        <button class="sess-btn sess-btn-open" onclick="openCustomerLink()">Open Driver View</button>
       </div>
     </div>
     <div class="session-id-display">
@@ -346,7 +345,7 @@
           </div>
           <div class="gauge-grid" id="gauge-grid">
             <div class="gauge-cell"><div class="gc-label">RPM</div><div class="gc-value">—</div><div class="gc-unit">RPM</div></div>
-            <div class="gauge-cell"><div class="gc-label">Speed</div><div class="gc-value">—</div><div class="gc-unit">km/h</div></div>
+            <div class="gauge-cell"><div class="gc-label">Speed</div><div class="gc-value">—</div><div class="gc-unit">MPH</div></div>
             <div class="gauge-cell"><div class="gc-label">Coolant</div><div class="gc-value">—</div><div class="gc-unit">°C</div></div>
             <div class="gauge-cell"><div class="gc-label">Oil Press</div><div class="gc-value">—</div><div class="gc-unit">kPa</div></div>
             <div class="gauge-cell"><div class="gc-label">Boost</div><div class="gc-value">—</div><div class="gc-unit">kPa</div></div>
@@ -383,7 +382,7 @@
           <div class="rdp-placeholder-text">Awaiting Tablet Connection</div>
           <div class="rdp-placeholder-sub">Connect to a session to view the driver's tablet desktop</div>
         </div>
-        <iframe id="rdp-iframe" allowfullscreen></iframe>
+        <iframe id="rdp-iframe" src="about:blank" allowfullscreen></iframe>
       </div>
       <div class="rdp-controls">
         <input type="text" class="rdp-url-input" id="rdp-url-input" placeholder="Tablet tunnel URL — auto-filled when tablet connects"/>
@@ -490,21 +489,6 @@
     }
   }
 
-  async function createSession() {
-    try {
-      const res  = await fetch('/api/create-session', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
-      const data = await res.json();
-      if (data.session_id) {
-        sessionId  = data.session_id;
-        techToken  = data.tech_token || '';
-        updateSessionUI();
-        if (ws) { ws.onclose = null; ws.close(); }
-        connectWs();
-        showToast('Session created: ' + sessionId);
-      }
-    } catch(e) { showToast('Failed to create session'); }
-  }
-
   function copyCustomerLink() {
     const url = document.getElementById('customer-session-link').textContent;
     navigator.clipboard.writeText(url).then(() => showToast('Customer link copied!')).catch(() => showToast('Copy failed'));
@@ -550,7 +534,7 @@
         <div class="session-item ${cls}" onclick="switchSession('${s.session_id}')">
           <div class="si-top"><span class="si-id">${s.session_id}</span>${badge}</div>
           <div class="si-truck">${truck}</div>
-          <div class="si-nexiq">${s.nexiq_connected ? '● ' + (s.adapter_name || 'Adapter') : '○ Adapter Offline'}</div>
+          <div class="si-nexiq">${s.nexiq_connected ? '● ' + (s.adapter_name || 'Adapter Online') : '○ Adapter Offline'}</div>
           ${faults}
           ${connectBtn}
         </div>`;
@@ -628,7 +612,7 @@
     const grid = document.getElementById('gauge-grid');
     const gauges = [
       { label:'RPM',       val: d.engine_rpm     != null ? Math.round(d.engine_rpm).toLocaleString() : '—', unit:'RPM' },
-      { label:'Speed',     val: d.vehicle_speed  != null ? d.vehicle_speed.toFixed(1) : '—',              unit:'km/h' },
+      { label:'Speed',     val: d.vehicle_speed  != null ? (d.vehicle_speed * 0.621371).toFixed(1) : '—', unit:'MPH' },
       { label:'Coolant',   val: d.coolant_temp   != null ? d.coolant_temp.toFixed(0) : '—',               unit:'°C' },
       { label:'Oil Press', val: d.oil_pressure   != null ? d.oil_pressure.toFixed(0) : '—',               unit:'kPa' },
       { label:'Boost',     val: d.boost_pressure != null ? d.boost_pressure.toFixed(0) : '—',             unit:'kPa' },
@@ -751,9 +735,15 @@
     status.className   = 'rdp-status connecting';
     status.textContent = 'Connecting...';
 
-    // Build noVNC URL pointing to the tablet's websockify port
-    // The tablet registers its tunnel URL which proxies to port 6080 (websockify)
-    const noVncUrl = `/novnc/vnc.html?host=${encodeURIComponent(url)}&port=443&encrypt=1&autoconnect=1&resize=scale&show_dot=1&path=websockify`;
+    // Build websockify WebSocket URL from the tunnel URL
+    // Cloudflare tunnel exposes port 6080 (websockify) as wss://xxxx.trycloudflare.com
+    let wsUrl = url;
+    if (!wsUrl.startsWith('ws')) {
+      wsUrl = wsUrl.replace('https://', 'wss://').replace('http://', 'ws://');
+    }
+
+    // Use noVNC inline viewer page served from our static files
+    const noVncUrl = `/novnc-viewer.html?ws=${encodeURIComponent(wsUrl)}`;
 
     iframe.src = noVncUrl;
     iframe.style.display = 'block';
@@ -771,7 +761,7 @@
     const iframe      = document.getElementById('rdp-iframe');
     const placeholder = document.getElementById('rdp-placeholder');
     const status      = document.getElementById('rdp-status');
-    iframe.src = '';
+    iframe.src = 'about:blank';
     iframe.style.display = 'none';
     placeholder.style.display = 'block';
     status.className   = 'rdp-status offline';
@@ -793,6 +783,10 @@
 
   // ── SEND COMMAND ───────────────────────────────────────────
   async function send(status, command, requires_ack, priority, show_modal, btn) {
+    if (!sessionId || !techToken) {
+      showToast('Connect to a session first');
+      return;
+    }
     btn.classList.add('fired');
     setTimeout(()=>btn.classList.remove('fired'), 500);
     try {
@@ -850,7 +844,7 @@
       .then(r => r.json())
       .then(applySessionData)
       .catch(()=>{})
-      .finally(()=> connectWs());
+      .finally(()=> { if (sessionId) connectWs(); });
   } else {
     // No session yet — just show the queue, wait for tech to click Connect
     document.getElementById('active-session-id').textContent = '— None —';

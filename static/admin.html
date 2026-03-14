@@ -344,9 +344,19 @@
 
   // Auto-login if token exists
   if (adminToken) {
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    refreshAll();
+    // Verify token is still valid before showing app
+    fetch(`/api/admin/stats?admin_token=${adminToken}`)
+      .then(r => {
+        if (r.status === 401) { doLogout(); return; }
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        refreshAll();
+      })
+      .catch(() => {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        refreshAll();
+      });
   }
 
   // ── TABS ───────────────────────────────────────────────────
@@ -362,9 +372,12 @@
 
   // ── REFRESH ALL ────────────────────────────────────────────
   async function refreshAll() {
-    loadStats();
-    loadOrgs();
+    await loadStats();
+    await loadOrgs();
+    // Auto-refresh stats every 10s
     setInterval(loadStats, 10000);
+    // Auto-refresh orgs every 30s
+    setInterval(loadOrgs, 30000);
   }
 
   // ── STATS ──────────────────────────────────────────────────
