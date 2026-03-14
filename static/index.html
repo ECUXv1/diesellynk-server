@@ -344,8 +344,12 @@
     }
 
     async function createNewSession() {
+      const orgId = params.get('org') || localStorage.getItem('dl_org_id') || 'unknown';
       try {
-        const res  = await fetch('/api/create-session', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+        const res  = await fetch('/api/create-session', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ org_id: orgId })
+        });
         const data = await res.json();
         sessionId   = data.session_id;
         driverToken = data.driver_token;

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DieselLynk — Technician Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --obsidian:#0A0A0A;--carbon:#1A1A1A;--steel:#3A3A3A;--titanium:#8A8A8A;
+      --gold:#D4AF37;--gold-bright:#F0CE5E;--gold-dim:#9A7D20;
+      --text-primary:#F0EAD6;--success:#58D68D;--danger:#FF6B6B;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html,body{min-height:100vh;background:var(--obsidian);color:var(--text-primary);font-family:'Rajdhani',sans-serif;display:flex;align-items:center;justify-content:center;}
+    body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.015) 0,rgba(255,255,255,.015) 1px,transparent 1px,transparent 10px),
+        repeating-linear-gradient(-45deg,rgba(255,255,255,.015) 0,rgba(255,255,255,.015) 1px,transparent 1px,transparent 10px);
+      background-color:var(--carbon);}
+    body::after{content:'';position:fixed;top:0;left:0;right:0;height:3px;z-index:999;pointer-events:none;
+      background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold-bright),var(--gold),var(--gold-bright),var(--gold-dim),transparent);}
+
+    .glow{position:fixed;inset:0;z-index:1;pointer-events:none;
+      background:radial-gradient(ellipse 60% 50% at 50% 50%,rgba(212,175,55,.08) 0%,transparent 65%);}
+
+    .corner{position:fixed;width:40px;height:40px;z-index:10;}
+    .corner::before,.corner::after{content:'';position:absolute;background:var(--gold-dim);}
+    .corner::before{width:2px;height:100%;}.corner::after{width:100%;height:2px;}
+    .corner.tl{top:18px;left:18px}.corner.tr{top:18px;right:18px;transform:scaleX(-1)}
+    .corner.bl{bottom:18px;left:18px;transform:scaleY(-1)}.corner.br{bottom:18px;right:18px;transform:scale(-1)}
+
+    .wrap{position:relative;z-index:5;width:100%;max-width:420px;padding:24px;}
+
+    .brand{text-align:center;margin-bottom:36px;animation:fadeUp .8s cubic-bezier(.22,1,.36,1) both;}
+    .logo{font-family:'Orbitron',sans-serif;font-size:clamp(36px,8vw,56px);font-weight:900;letter-spacing:.08em;color:var(--gold);text-shadow:0 0 30px rgba(212,175,55,.4);}
+    .tagline{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.35em;color:var(--titanium);margin-top:6px;}
+    .divider{width:100%;height:1px;margin:16px 0;background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold),var(--gold-dim),transparent);}
+
+    .card{background:rgba(26,26,26,.92);border:1px solid var(--steel);border-radius:14px;padding:36px 32px;position:relative;overflow:hidden;animation:fadeUp .9s .15s cubic-bezier(.22,1,.36,1) both;backdrop-filter:blur(16px);}
+    .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold-bright),var(--gold-dim),transparent);}
+
+    .card-title{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--titanium);margin-bottom:28px;text-align:center;}
+
+    .field{margin-bottom:20px;}
+    .field label{display:block;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--titanium);margin-bottom:8px;}
+    .field input{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--steel);border-radius:8px;padding:13px 16px;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:600;color:var(--text-primary);letter-spacing:.04em;outline:none;transition:border-color .2s,box-shadow .2s;}
+    .field input:focus{border-color:var(--gold-dim);box-shadow:0 0 0 3px rgba(212,175,55,.1);}
+    .field input::placeholder{color:var(--steel);}
+
+    .login-btn{width:100%;padding:15px;border:none;border-radius:10px;cursor:pointer;
+      background:linear-gradient(135deg,var(--gold-dim),var(--gold),var(--gold-bright));
+      font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+      color:#0A0A0A;transition:transform .15s,box-shadow .2s;margin-top:8px;}
+    .login-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(212,175,55,.35);}
+    .login-btn:active{transform:scale(.98);}
+    .login-btn:disabled{opacity:.5;cursor:wait;transform:none;}
+
+    .error-msg{display:none;margin-top:16px;padding:12px 16px;background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.3);border-radius:8px;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;color:var(--danger);text-align:center;letter-spacing:.04em;}
+    .error-msg.show{display:block;}
+
+    .hint{margin-top:20px;padding:14px 16px;background:rgba(212,175,55,.05);border:1px solid rgba(212,175,55,.12);border-radius:8px;}
+    .hint-title{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.18em;color:var(--gold-dim);margin-bottom:8px;}
+    .hint-row{font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--titanium);margin-bottom:4px;}
+    .hint-row span{color:var(--text-primary);font-weight:600;}
+
+    @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo">DieselLynk</div>
+      <div class="tagline">The Intelligence Network</div>
+      <div class="divider"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Technician Access</div>
+
+      <div class="field">
+        <label>Organization ID</label>
+        <input type="text" id="org-id" placeholder="e.g. demo_fleet" autocomplete="off" autocapitalize="none"/>
+      </div>
+
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••"/>
+      </div>
+
+      <button class="login-btn" id="login-btn" onclick="doLogin()">Access Panel</button>
+      <div class="error-msg" id="error-msg">Invalid organization ID or password.</div>
+
+      <div class="hint">
+        <div class="hint-title">Demo Credentials</div>
+        <div class="hint-row">DieselLynk Techs — Org: <span>diesellynk</span></div>
+        <div class="hint-row">Demo Fleet — Org: <span>demo_fleet</span> · Pass: <span>demo1234</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // If already logged in, redirect
+    const stored = localStorage.getItem('dl_tech_auth_token');
+    if (stored) {
+      window.location.href = '/tech.html';
+    }
+
+    document.getElementById('password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+
+    async function doLogin() {
+      const orgId    = document.getElementById('org-id').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const btn      = document.getElementById('login-btn');
+      const errEl    = document.getElementById('error-msg');
+
+      if (!orgId || !password) {
+        errEl.textContent = 'Please enter your organization ID and password.';
+        errEl.classList.add('show');
+        return;
+      }
+
+      btn.disabled = true;
+      errEl.classList.remove('show');
+
+      try {
+        const res  = await fetch('/api/tech-login', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ org_id: orgId, password })
+        });
+        const data = await res.json();
+
+        if (data.ok && data.tech_auth_token) {
+          localStorage.setItem('dl_tech_auth_token', data.tech_auth_token);
+          localStorage.setItem('dl_tech_org_id',     data.org_id);
+          localStorage.setItem('dl_tech_is_dl',      data.is_diesellynk ? '1' : '0');
+          window.location.href = '/tech.html';
+        } else {
+          errEl.textContent = data.message || 'Invalid credentials.';
+          errEl.classList.add('show');
+          btn.disabled = false;
+        }
+      } catch(e) {
+        errEl.textContent = 'Connection error — please try again.';
+        errEl.classList.add('show');
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

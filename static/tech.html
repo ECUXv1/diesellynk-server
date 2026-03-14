@@ -221,6 +221,8 @@
         <span id="ws-label">Connecting</span>
       </div>
       <div class="auth-badge"><span class="auth-dot"></span>Authorized Access</div>
+      <div class="auth-badge" id="org-badge" style="background:rgba(88,214,141,.08);border-color:rgba(88,214,141,.22);color:#58D68D;">—</div>
+      <button onclick="logout()" style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:6px 14px;border:1px solid var(--steel);border-radius:20px;background:transparent;color:var(--titanium);cursor:pointer;">Logout</button>
     </div>
   </div>
 
@@ -388,10 +390,24 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  // ── URL PARAMS ─────────────────────────────────────────────
-  const params    = new URLSearchParams(location.search);
-  let sessionId   = params.get('session') || 'DL-default';
-  let techToken   = params.get('token')   || '';
+  // ── AUTH CHECK ─────────────────────────────────────────────
+  const techAuthToken = localStorage.getItem('dl_tech_auth_token') || '';
+  const techOrgId     = localStorage.getItem('dl_tech_org_id') || '';
+  const isDieselLynk  = localStorage.getItem('dl_tech_is_dl') === '1';
+
+  if (!techAuthToken) {
+    window.location.href = '/login.html';
+  }
+
+  function logout() {
+    localStorage.removeItem('dl_tech_auth_token');
+    localStorage.removeItem('dl_tech_org_id');
+    localStorage.removeItem('dl_tech_is_dl');
+    window.location.href = '/login.html';
+  }
+
+  let sessionId   = new URLSearchParams(location.search).get('session') || '';
+  let techToken   = '';
 
   let ws = null, wsReconnectTimer = null;
   let lastStatus = '', lastCommand = '', lastAck = null, lastMsg = '';
@@ -435,7 +451,8 @@
   let dashTimer = null;
   async function refreshSessions() {
     try {
-      const res  = await fetch('/api/active-sessions');
+      const res  = await fetch(`/api/active-sessions?tech_auth_token=${encodeURIComponent(techAuthToken)}`);
+      if (res.status === 401) { logout(); return; }
       const list = await res.json();
       renderSessionsDash(list);
     } catch(e) {}
@@ -476,16 +493,20 @@
   async function switchSession(id) {
     if (id === sessionId) return;
     try {
-      const res  = await fetch(`/api/tech-join/${encodeURIComponent(id)}`, { method: 'POST' });
+      const res  = await fetch(`/api/tech-join/${encodeURIComponent(id)}`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ tech_auth_token: techAuthToken })
+      });
+      if (res.status === 401) { logout(); return; }
+      if (res.status === 403) { showToast('Access denied — wrong organization'); return; }
       const data = await res.json();
       if (data.tech_token) {
-        sessionId  = id;
-        techToken  = data.tech_token;
+        sessionId = id;
+        techToken = data.tech_token;
         updateSessionUI();
         if (ws) { ws.onclose = null; ws.close(); }
         connectWs();
         showToast('Connected to ' + id);
-        // Auto send "Technician Connected" command
         await fetch(`/api/update/${encodeURIComponent(sessionId)}`, {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({ tech_token: techToken, status:'Technician Connected', command:'Technician has joined — preparing diagnostics', requires_ack:false, priority:'info', show_modal:false })
@@ -685,6 +706,10 @@
   }
 
   // ── BOOT ──────────────────────────────────────────────────
+  // Show org badge
+  const orgBadge = document.getElementById('org-badge');
+  if (orgBadge) orgBadge.textContent = isDieselLynk ? '⚡ DieselLynk Tech' : `Org: ${techOrgId}`;
+
   updateSessionUI();
   fetch(`/api/session/${encodeURIComponent(sessionId)}`)
     .then(r => r.json())
