@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DieselLynk — Technician Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --obsidian:#0A0A0A;--carbon:#1A1A1A;--steel:#3A3A3A;--titanium:#8A8A8A;
+      --gold:#D4AF37;--gold-bright:#F0CE5E;--gold-dim:#9A7D20;
+      --text-primary:#F0EAD6;--text-muted:#8A8A8A;
+      --success:#27AE60;--danger:#C0392B;--ack-yes:#58D68D;--ack-no:#FF6B6B;
+      --info-blue:#5DADE2;--warn-orange:#F39C12;--crit-red:#E74C3C;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html,body{min-height:100vh;background:var(--obsidian);color:var(--text-primary);font-family:'Rajdhani',sans-serif;}
+    body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.015) 0,rgba(255,255,255,.015) 1px,transparent 1px,transparent 10px),
+        repeating-linear-gradient(-45deg,rgba(255,255,255,.015) 0,rgba(255,255,255,.015) 1px,transparent 1px,transparent 10px);
+      background-color:var(--carbon);}
+    body::after{content:'';position:fixed;top:0;left:0;right:0;height:3px;z-index:999;pointer-events:none;
+      background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold-bright),var(--gold),var(--gold-bright),var(--gold-dim),transparent);}
+
+    .shell{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:32px 28px 80px;}
+
+    /* HEADER */
+    .header{display:flex;align-items:center;gap:18px;padding-bottom:22px;margin-bottom:20px;border-bottom:1px solid var(--steel);position:relative;animation:slideDown .7s cubic-bezier(.22,1,.36,1) both;}
+    .header::after{content:'';position:absolute;bottom:-1px;left:0;width:200px;height:1px;background:linear-gradient(90deg,var(--gold),transparent);}
+    @keyframes slideDown{from{opacity:0;transform:translateY(-18px)}to{opacity:1;transform:translateY(0)}}
+    .header-info h1{font-family:'Orbitron',sans-serif;font-size:clamp(16px,2.4vw,22px);font-weight:900;letter-spacing:.1em;text-transform:uppercase;background:linear-gradient(90deg,var(--gold-dim),var(--gold-bright),var(--gold));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite;}
+    @keyframes shimmer{to{background-position:200% center}}
+    .header-info p{font-size:13px;font-weight:500;color:var(--titanium);margin-top:3px;letter-spacing:.04em;}
+    .header-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+    .auth-badge{display:flex;align-items:center;gap:7px;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.22);border-radius:20px;padding:6px 14px;}
+    .auth-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);animation:pulse 1.5s ease-in-out infinite;}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+    .ws-badge{display:flex;align-items:center;gap:7px;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--titanium);background:rgba(255,255,255,.04);border:1px solid var(--steel);border-radius:20px;padding:6px 12px;}
+    .ws-dot{width:7px;height:7px;border-radius:50%;background:var(--steel);transition:background .4s,box-shadow .4s;}
+    .ws-dot.connected{background:var(--ack-yes);box-shadow:0 0 8px var(--ack-yes);}
+    .ws-dot.reconnecting{background:var(--warn-orange);box-shadow:0 0 8px var(--warn-orange);animation:pulse .6s ease-in-out infinite;}
+
+    /* BRAND */
+    .brand-hero{text-align:center;margin-bottom:28px;animation:slideDown .7s .1s cubic-bezier(.22,1,.36,1) both;}
+    .text-logo{font-family:'Orbitron',sans-serif;font-size:clamp(42px,7vw,86px);font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#D4AF37;text-shadow:0 0 20px rgba(212,175,55,.35);line-height:1;}
+    .brand-hero .sub{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.35em;text-transform:uppercase;color:var(--titanium);margin-top:6px;}
+
+    /* SESSION CARD */
+    .session-card{background:var(--carbon);border:1px solid var(--steel);border-radius:12px;padding:20px 24px;margin-bottom:24px;position:relative;overflow:hidden;animation:cardUp .5s cubic-bezier(.22,1,.36,1) both;}
+    .session-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold-bright),var(--gold-dim),transparent);}
+    @keyframes cardUp{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .session-card-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px;}
+    .session-card-title{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--titanium);}
+    .session-id-display{display:flex;align-items:center;gap:10px;font-family:'Orbitron',sans-serif;font-size:clamp(14px,2vw,20px);font-weight:700;letter-spacing:.12em;color:var(--gold);text-shadow:0 0 14px rgba(212,175,55,.3);}
+    .session-actions{display:flex;gap:10px;flex-wrap:wrap;}
+    .sess-btn{font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:9px 18px;border:none;border-radius:7px;cursor:pointer;transition:transform .15s,box-shadow .2s,opacity .2s;}
+    .sess-btn:hover{transform:translateY(-1px);}.sess-btn:active{transform:scale(.97);}
+    .sess-btn-new{background:linear-gradient(135deg,var(--gold-dim),var(--gold));color:#0A0A0A;}
+    .sess-btn-new:hover{box-shadow:0 4px 18px rgba(212,175,55,.4);}
+    .sess-btn-copy{background:rgba(255,255,255,.06);border:1px solid var(--steel);color:var(--text-primary);}
+    .sess-btn-copy:hover{border-color:var(--gold-dim);}
+    .sess-btn-open{background:rgba(46,134,193,.15);border:1px solid rgba(46,134,193,.3);color:var(--info-blue);}
+    .customer-link-row{display:none;margin-top:12px;padding:10px 14px;background:rgba(0,0,0,.3);border:1px solid var(--steel);border-radius:8px;font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--titanium);word-break:break-all;}
+    .customer-link-row.show{display:block;}
+    .customer-link-row a{color:var(--info-blue);text-decoration:none;}
+    .customer-link-row a:hover{text-decoration:underline;}
+
+    /* LABELS */
+    .sec-label{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--titanium);margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+    .sec-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--steel),transparent);}
+
+    /* ── ACTIVE SESSIONS DASHBOARD ───────────────────────────── */
+    .sessions-dash{margin-bottom:28px;animation:cardUp .5s .05s cubic-bezier(.22,1,.36,1) both;}
+    .sessions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+    .session-item{background:var(--carbon);border:1px solid var(--steel);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .2s,box-shadow .2s;position:relative;overflow:hidden;}
+    .session-item::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold-dim),var(--gold-bright),var(--gold-dim));transform:scaleX(0);transition:transform .25s;}
+    .session-item:hover{border-color:var(--gold-dim);box-shadow:0 8px 24px rgba(212,175,55,.12);}
+    .session-item:hover::before{transform:scaleX(1);}
+    .session-item.service-pending{border-color:var(--warn-orange);animation:alertPulse 2s ease-in-out infinite;}
+    @keyframes alertPulse{0%,100%{box-shadow:0 0 0 0 rgba(243,156,18,0)}50%{box-shadow:0 0 20px 4px rgba(243,156,18,.2)}}
+    .session-item.service-pending::before{background:linear-gradient(90deg,#7A5000,var(--warn-orange),#7A5000);transform:scaleX(1);}
+    .si-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+    .si-id{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--gold);}
+    .si-status-badge{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:8px;}
+    .si-status-badge.service{background:rgba(243,156,18,.15);color:var(--warn-orange);border:1px solid rgba(243,156,18,.3);}
+    .si-status-badge.active{background:rgba(88,214,141,.1);color:var(--ack-yes);border:1px solid rgba(88,214,141,.25);}
+    .si-status-badge.idle{background:rgba(58,58,58,.4);color:var(--titanium);border:1px solid var(--steel);}
+    .si-truck{font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;color:var(--text-primary);}
+    .si-nexiq{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.1em;color:var(--titanium);margin-top:4px;}
+    .si-faults{font-family:'Orbitron',sans-serif;font-size:9px;color:var(--danger);margin-top:4px;}
+    .sessions-empty{font-family:'Rajdhani',sans-serif;font-size:15px;color:var(--titanium);padding:20px;text-align:center;background:var(--carbon);border:1px solid var(--steel);border-radius:10px;}
+
+    /* CMD GRID */
+    .cmd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:28px;}
+    .cmd-btn{position:relative;padding:18px 16px 16px;background:var(--carbon);border:1px solid var(--steel);border-radius:10px;cursor:pointer;text-align:left;overflow:hidden;transition:border-color .2s,transform .15s,box-shadow .2s;animation:cardUp .5s cubic-bezier(.22,1,.36,1) both;}
+    .cmd-btn:nth-child(1){animation-delay:.04s}.cmd-btn:nth-child(2){animation-delay:.08s}.cmd-btn:nth-child(3){animation-delay:.12s}.cmd-btn:nth-child(4){animation-delay:.16s}.cmd-btn:nth-child(5){animation-delay:.20s}.cmd-btn:nth-child(6){animation-delay:.24s}.cmd-btn:nth-child(7){animation-delay:.28s}.cmd-btn:nth-child(8){animation-delay:.32s}
+    .cmd-btn::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--gold-dim),var(--gold-bright),var(--gold-dim));transform:scaleX(0);transform-origin:left;transition:transform .28s;}
+    .cmd-btn:hover::before{transform:scaleX(1);}
+    .cmd-btn:hover{border-color:var(--gold-dim);transform:translateY(-3px);box-shadow:0 8px 28px rgba(212,175,55,.15);}
+    .cmd-btn:active{transform:translateY(0) scale(.98);}
+    .cmd-btn.danger::before{background:linear-gradient(90deg,#7B241C,var(--danger),#7B241C);}
+    .cmd-btn.danger:hover{border-color:var(--danger);}
+    .cmd-btn.success::before{background:linear-gradient(90deg,#1A5C3A,var(--success),#1A5C3A);}
+    .cmd-btn.success:hover{border-color:var(--success);}
+    .cmd-btn.p-warning::before{background:linear-gradient(90deg,#7A5000,var(--warn-orange),#7A5000);}
+    .cmd-btn.p-warning:hover{border-color:var(--warn-orange);}
+    .cmd-btn.p-action:hover{border-color:var(--gold);}
+    .cmd-btn.p-critical::before{background:linear-gradient(90deg,#7B241C,var(--crit-red),#7B241C);}
+    .cmd-btn.p-critical:hover{border-color:var(--crit-red);}
+    .btn-icon{font-size:20px;display:block;margin-bottom:10px;}
+    .btn-label{font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-primary);}
+    .btn-sub{font-family:'Rajdhani',sans-serif;font-size:12px;color:var(--titanium);margin-top:4px;}
+    .btn-badge{display:inline-block;margin-top:6px;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.15em;text-transform:uppercase;padding:2px 8px;border-radius:10px;border:1px solid currentColor;}
+    .badge-warn{color:var(--warn-orange);}.badge-action{color:var(--gold);}.badge-info{color:var(--info-blue);}.badge-critical{color:var(--crit-red);}
+    .cmd-btn.fired{animation:goldFlash .45s ease;}
+    @keyframes goldFlash{0%{box-shadow:0 0 0 0 rgba(212,175,55,.7)}50%{box-shadow:0 0 0 14px rgba(212,175,55,0)}100%{box-shadow:none}}
+
+    /* ── TRUCK DATA LIVE VIEW ─────────────────────────────────── */
+    .live-view-wrap{margin-bottom:28px;}
+    .live-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+    @media(max-width:640px){.live-cols{grid-template-columns:1fr;}}
+
+    /* Truck info card */
+    .data-card{background:var(--carbon);border:1px solid var(--steel);border-radius:12px;overflow:hidden;animation:cardUp .5s .38s cubic-bezier(.22,1,.36,1) both;}
+    .data-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:rgba(0,0,0,.3);border-bottom:1px solid var(--steel);position:relative;}
+    .data-card-hdr::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold-dim),transparent);}
+    .data-card-title{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-dim);}
+    .nexiq-status-pill{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.12em;padding:3px 10px;border-radius:10px;transition:all .3s;}
+    .nexiq-status-pill.connected{background:rgba(88,214,141,.1);color:var(--ack-yes);border:1px solid rgba(88,214,141,.3);}
+    .nexiq-status-pill.disconnected{background:rgba(58,58,58,.3);color:var(--titanium);border:1px solid var(--steel);}
+
+    .truck-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--steel);}
+    .truck-cell{background:rgba(26,26,26,.95);padding:11px 14px;}
+    .truck-cell.span2{grid-column:span 2;}
+    .tc-label{font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.16em;color:var(--titanium);margin-bottom:4px;}
+    .tc-value{font-family:'Orbitron',sans-serif;font-size:clamp(10px,1.4vw,13px);font-weight:600;color:var(--text-primary);}
+
+    /* Gauges */
+    .gauge-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--steel);}
+    .gauge-cell{background:rgba(26,26,26,.95);padding:14px 10px;text-align:center;}
+    .gc-label{font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.14em;text-transform:uppercase;color:var(--titanium);margin-bottom:6px;}
+    .gc-value{font-family:'Orbitron',sans-serif;font-size:clamp(16px,2.2vw,24px);font-weight:700;color:var(--gold);line-height:1;}
+    .gc-unit{font-family:'Rajdhani',sans-serif;font-size:10px;color:var(--titanium);margin-top:2px;}
+
+    /* Fault codes */
+    .fault-list{padding:10px 14px;display:flex;flex-direction:column;gap:7px;max-height:300px;overflow-y:auto;}
+    .fault-list::-webkit-scrollbar{width:3px;}.fault-list::-webkit-scrollbar-thumb{background:var(--steel);border-radius:2px;}
+    .fault-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(0,0,0,.3);border-radius:8px;border-left:3px solid var(--danger);}
+    .fault-row.inactive{border-left-color:var(--titanium);}
+    .fault-spn{font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;color:var(--danger);white-space:nowrap;min-width:56px;}
+    .fault-row.inactive .fault-spn{color:var(--titanium);}
+    .fault-info{flex:1;}
+    .fault-desc{font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;color:var(--text-primary);}
+    .fault-meta{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.08em;color:var(--titanium);margin-top:2px;}
+    .fault-badge{font-family:'Orbitron',sans-serif;font-size:8px;padding:3px 8px;border-radius:8px;white-space:nowrap;}
+    .fault-badge.active{background:rgba(192,57,43,.15);color:var(--ack-no);border:1px solid rgba(192,57,43,.3);}
+    .fault-badge.stored{background:rgba(58,58,58,.3);color:var(--titanium);border:1px solid var(--steel);}
+    .fault-empty{font-family:'Rajdhani',sans-serif;font-size:14px;color:var(--titanium);padding:20px;text-align:center;}
+
+    /* MONITOR */
+    .monitor{background:var(--carbon);border:1px solid var(--steel);border-radius:12px;overflow:hidden;animation:cardUp .6s .42s cubic-bezier(.22,1,.36,1) both;margin-bottom:28px;}
+    .monitor-bar{display:flex;align-items:center;gap:10px;padding:11px 18px;background:rgba(0,0,0,.35);border-bottom:1px solid var(--steel);}
+    .monitor-bar-title{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-dim);}
+    .bar-dots{display:flex;gap:6px;margin-left:auto;}
+    .bar-dot{width:9px;height:9px;border-radius:50%;}
+    .bd-r{background:#FF5F57}.bd-y{background:#FEBC2E}.bd-g{background:#28C840}
+    .monitor-body{padding:18px 22px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+    .m-field{background:rgba(0,0,0,.3);border:1px solid var(--steel);border-radius:8px;padding:12px 14px;position:relative;overflow:hidden;}
+    .m-field::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--gold-dim);}
+    .m-field.cmd-f::before{background:var(--titanium);}.m-field.ack-f::before{background:var(--info-blue);}.m-field.prio-f::before{background:var(--warn-orange);}.m-field.modal-f::before{background:#9B59B6;}
+    .m-label{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--titanium);margin-bottom:6px;}
+    .m-value{font-family:'Orbitron',sans-serif;font-size:clamp(10px,1.5vw,13px);font-weight:600;color:var(--text-primary);letter-spacing:.04em;transition:color .3s;}
+    .m-value.lit{animation:valueLit .5s ease;}
+    @keyframes valueLit{0%{color:var(--gold-bright)}100%{color:var(--text-primary)}}
+    .m-value.ack-yes{color:var(--ack-yes);font-weight:700;}.m-value.ack-no{color:var(--ack-no);font-weight:700;}
+    .m-value.modal-on{color:#CE93D8;font-weight:700;}.m-value.modal-off{color:var(--titanium);}
+    .m-value.prio-info{color:var(--info-blue);}.m-value.prio-action{color:var(--gold);}.m-value.prio-warning{color:var(--warn-orange);}.m-value.prio-critical{color:var(--crit-red);font-weight:700;}
+    .monitor-body-2{padding:0 22px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    @media(max-width:520px){.monitor-body-2{grid-template-columns:1fr;}}
+    .m-field-wide{background:rgba(0,0,0,.3);border:1px solid var(--steel);border-radius:8px;padding:12px 14px;position:relative;overflow:hidden;}
+
+    /* LOGS */
+    .log-wrap{margin-top:20px;animation:cardUp .6s .55s cubic-bezier(.22,1,.36,1) both;}
+    .log-box{background:var(--carbon);border:1px solid var(--steel);border-radius:10px;overflow:hidden;}
+    .log-hdr{display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(0,0,0,.3);border-bottom:1px solid var(--steel);font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--titanium);}
+    .log-pip{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse 1.2s infinite;}
+    .log-pip.blue{background:var(--info-blue);}
+    .log-list{padding:8px 0;max-height:200px;overflow-y:auto;}
+    .log-list::-webkit-scrollbar{width:3px;}.log-list::-webkit-scrollbar-thumb{background:var(--steel);border-radius:2px;}
+    .log-row{display:flex;align-items:baseline;gap:10px;padding:5px 16px;font-size:12px;border-left:2px solid transparent;}
+    .log-row:hover{background:rgba(212,175,55,.03);}
+    .log-row.fresh{border-left-color:var(--gold);animation:rowSlide .4s ease;}
+    .log-row.ack-row{border-left-color:var(--ack-yes);}.log-row.help-row{border-left-color:var(--ack-no);}.log-row.event-row{border-left-color:var(--info-blue);}
+    @keyframes rowSlide{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+    .log-ts{color:var(--titanium);font-size:10px;white-space:nowrap;font-variant-numeric:tabular-nums;}
+    .log-msg{color:var(--text-primary);font-weight:500;}.log-cmd{color:var(--gold-dim);margin-left:auto;font-size:11px;}
+    .log-empty{padding:12px 16px;font-size:12px;color:var(--titanium);font-style:italic;}
+    .ev-info{color:var(--info-blue);}.ev-action{color:var(--gold);}.ev-warning{color:var(--warn-orange);}.ev-critical{color:var(--crit-red);font-weight:700;}
+    .ev-nexiq{color:var(--ack-yes);}.ev-truck_id{color:var(--ack-yes);}.ev-fault_codes{color:var(--ack-no);}.ev-service_request{color:var(--warn-orange);font-weight:700;}
+
+    /* TOAST */
+    .toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%) translateY(20px);z-index:999;opacity:0;transition:opacity .3s,transform .3s;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.15em;text-transform:uppercase;background:rgba(26,26,26,.95);border:1px solid var(--gold-dim);border-radius:20px;padding:8px 20px;color:var(--gold);pointer-events:none;}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+    .footer{margin-top:44px;display:flex;align-items:center;gap:16px;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--steel);}
+    .footer-line{flex:1;height:1px;background:var(--steel);}
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-info">
+      <h1>Technician Panel</h1>
+      <p>Control what the customer sees in real time.</p>
+    </div>
+    <div class="header-right">
+      <div class="ws-badge" id="ws-badge">
+        <span class="ws-dot" id="ws-dot"></span>
+        <span id="ws-label">Connecting</span>
+      </div>
+      <div class="auth-badge"><span class="auth-dot"></span>Authorized Access</div>
+    </div>
+  </div>
+
+  <!-- SESSION BOOTSTRAP CARD -->
+  <div class="session-card">
+    <div class="session-card-header">
+      <div class="session-card-title">Active Session</div>
+      <div class="session-actions">
+        <button class="sess-btn sess-btn-new" onclick="createSession()">+ New Session</button>
+        <button class="sess-btn sess-btn-copy" onclick="copyCustomerLink()">Copy Customer Link</button>
+        <button class="sess-btn sess-btn-open" onclick="openCustomerLink()">Open Customer View</button>
+      </div>
+    </div>
+    <div class="session-id-display">
+      <span style="color:var(--titanium);font-size:11px;font-weight:400;letter-spacing:.1em;">SESSION</span>
+      <span id="active-session-id">—</span>
+    </div>
+    <div class="customer-link-row" id="customer-link-row">
+      Customer URL: <a id="customer-session-link" href="#" target="_blank">—</a>
+    </div>
+  </div>
+
+  <div class="brand-hero">
+    <div class="text-logo">DieselLynk</div>
+    <div class="sub">The Intelligence Network</div>
+  </div>
+
+  <!-- ── ACTIVE SESSIONS DASHBOARD ─────────────────────────── -->
+  <div class="sessions-dash">
+    <div class="sec-label">Service Queue</div>
+    <div class="sessions-grid" id="sessions-grid">
+      <div class="sessions-empty">No active sessions.</div>
+    </div>
+  </div>
+
+  <div class="sec-label">Command Dispatch</div>
+  <div class="cmd-grid">
+    <button class="cmd-btn success" onclick="send('Technician Connected','Preparing Diagnostics...',false,'info',false,this)">
+      <span class="btn-icon">⚡</span><div class="btn-label">Start Session</div><div class="btn-sub">Initialize diagnostic link</div><span class="btn-badge badge-info">INFO</span>
+    </button>
+    <button class="cmd-btn p-warning" onclick="send('Technician Connected','Turn Ignition OFF',true,'warning',true,this)">
+      <span class="btn-icon">🔑</span><div class="btn-label">Ignition OFF</div><div class="btn-sub">Requires customer ack</div><span class="btn-badge badge-warn">WARNING · ACK</span>
+    </button>
+    <button class="cmd-btn p-action" onclick="send('Technician Connected','Turn Ignition ON',true,'action',true,this)">
+      <span class="btn-icon">🔑</span><div class="btn-label">Ignition ON</div><div class="btn-sub">Requires customer ack</div><span class="btn-badge badge-action">ACTION · ACK</span>
+    </button>
+    <button class="cmd-btn" onclick="send('Technician Connected','Reading Fault Codes',false,'info',false,this)">
+      <span class="btn-icon">🔍</span><div class="btn-label">Read Fault Codes</div><div class="btn-sub">Scan DTC register</div><span class="btn-badge badge-info">INFO</span>
+    </button>
+    <button class="cmd-btn p-action" onclick="send('Technician Connected','Uploading Calibration',false,'action',false,this)">
+      <span class="btn-icon">📡</span><div class="btn-label">Upload Calibration</div><div class="btn-sub">Flash new tune data</div><span class="btn-badge badge-action">ACTION</span>
+    </button>
+    <button class="cmd-btn p-critical" onclick="send('Technician Connected','Running Forced Regen',false,'critical',true,this)">
+      <span class="btn-icon">🔥</span><div class="btn-label">Forced Regen</div><div class="btn-sub">DPF regeneration cycle</div><span class="btn-badge badge-critical">CRITICAL · MODAL</span>
+    </button>
+    <button class="cmd-btn success" onclick="send('Technician Connected','Session Complete',false,'info',false,this)">
+      <span class="btn-icon">✅</span><div class="btn-label">Complete Session</div><div class="btn-sub">Mark job done</div><span class="btn-badge badge-info">INFO</span>
+    </button>
+    <button class="cmd-btn danger" onclick="send('Technician Disconnected','Waiting for technician...',false,'info',false,this)">
+      <span class="btn-icon">⛔</span><div class="btn-label">Disconnect</div><div class="btn-sub">End remote session</div><span class="btn-badge badge-info">INFO</span>
+    </button>
+  </div>
+
+  <!-- ── LIVE TRUCK DATA ─────────────────────────────────────── -->
+  <div class="live-view-wrap">
+    <div class="sec-label">Live Truck Data</div>
+    <div class="live-cols">
+
+      <!-- Truck identity + gauges -->
+      <div>
+        <div class="data-card" id="truck-card">
+          <div class="data-card-hdr">
+            <span class="data-card-title">🚛 Vehicle ID</span>
+            <span class="nexiq-status-pill disconnected" id="nexiq-pill">Adapter Offline</span>
+          </div>
+          <div class="truck-grid" id="truck-grid">
+            <div class="truck-cell span2"><div class="tc-label">Status</div><div class="tc-value" style="color:var(--titanium);font-size:12px;">Awaiting adapter connection</div></div>
+          </div>
+        </div>
+        <div class="data-card" style="margin-top:12px;" id="gauges-card">
+          <div class="data-card-hdr">
+            <span class="data-card-title">⚡ Engine Gauges</span>
+          </div>
+          <div class="gauge-grid" id="gauge-grid">
+            <div class="gauge-cell"><div class="gc-label">RPM</div><div class="gc-value">—</div><div class="gc-unit">RPM</div></div>
+            <div class="gauge-cell"><div class="gc-label">Speed</div><div class="gc-value">—</div><div class="gc-unit">km/h</div></div>
+            <div class="gauge-cell"><div class="gc-label">Coolant</div><div class="gc-value">—</div><div class="gc-unit">°C</div></div>
+            <div class="gauge-cell"><div class="gc-label">Oil Press</div><div class="gc-value">—</div><div class="gc-unit">kPa</div></div>
+            <div class="gauge-cell"><div class="gc-label">Boost</div><div class="gc-value">—</div><div class="gc-unit">kPa</div></div>
+            <div class="gauge-cell"><div class="gc-label">Battery</div><div class="gc-value">—</div><div class="gc-unit">V</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fault codes -->
+      <div class="data-card" id="fault-card">
+        <div class="data-card-hdr" style="justify-content:space-between;">
+          <span class="data-card-title">⚠ Fault Codes</span>
+          <span id="fault-count-badge" style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--danger);"></span>
+        </div>
+        <div class="fault-list" id="fault-list">
+          <div class="fault-empty">No fault codes.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MONITOR -->
+  <div class="sec-label">Live Customer Screen</div>
+  <div class="monitor">
+    <div class="monitor-bar">
+      <div class="monitor-bar-title">Real-Time Feed</div>
+      <div class="bar-dots"><div class="bar-dot bd-r"></div><div class="bar-dot bd-y"></div><div class="bar-dot bd-g"></div></div>
+    </div>
+    <div class="monitor-body">
+      <div class="m-field"><div class="m-label">Status</div><div class="m-value" id="live-status">—</div></div>
+      <div class="m-field cmd-f"><div class="m-label">Command</div><div class="m-value" id="live-command">—</div></div>
+      <div class="m-field ack-f"><div class="m-label">Requires Ack</div><div class="m-value" id="live-requires-ack">—</div></div>
+      <div class="m-field prio-f"><div class="m-label">Priority</div><div class="m-value" id="live-priority">—</div></div>
+      <div class="m-field modal-f"><div class="m-label">Show Modal</div><div class="m-value" id="live-show-modal">—</div></div>
+    </div>
+    <div class="monitor-body-2">
+      <div class="m-field-wide" style="position:relative;">
+        <div style="position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--ack-yes);border-radius:2px 0 0 2px;"></div>
+        <div class="m-label" style="padding-left:6px;">Customer Ack</div>
+        <div class="m-value" id="live-customer-ack" style="padding-left:6px;">—</div>
+      </div>
+      <div class="m-field-wide" style="position:relative;">
+        <div style="position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--gold);border-radius:2px 0 0 2px;"></div>
+        <div class="m-label" style="padding-left:6px;">Customer Message</div>
+        <div class="m-value" id="live-customer-message" style="padding-left:6px;">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGS -->
+  <div class="log-wrap">
+    <div class="sec-label">Activity Log</div>
+    <div class="log-box">
+      <div class="log-hdr"><span class="log-pip"></span>Session Events</div>
+      <div class="log-list" id="log-list">
+        <div class="log-empty">Awaiting first command…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-wrap" style="margin-top:20px;">
+    <div class="sec-label">Event Log</div>
+    <div class="log-box">
+      <div class="log-hdr"><span class="log-pip blue"></span>Server Events</div>
+      <div class="log-list" id="event-log">
+        <div class="log-empty">No events yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-line"></div>
+    DieselLynk — The Intelligence Network
+    <div class="footer-line"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── URL PARAMS ─────────────────────────────────────────────
+  const params    = new URLSearchParams(location.search);
+  let sessionId   = params.get('session') || 'DL-default';
+  let techToken   = params.get('token')   || '';
+
+  let ws = null, wsReconnectTimer = null;
+  let lastStatus = '', lastCommand = '', lastAck = null, lastMsg = '';
+
+  // ── SESSION UI ─────────────────────────────────────────────
+  function updateSessionUI() {
+    document.getElementById('active-session-id').textContent = sessionId;
+    const customerUrl = `${location.origin}/index.html?session=${encodeURIComponent(sessionId)}`;
+    const linkEl = document.getElementById('customer-session-link');
+    linkEl.textContent = customerUrl;
+    linkEl.href = customerUrl;
+    document.getElementById('customer-link-row').classList.add('show');
+    try { history.replaceState(null, '', `${location.pathname}?session=${encodeURIComponent(sessionId)}&token=${encodeURIComponent(techToken)}`); } catch(e) {}
+  }
+
+  async function createSession() {
+    try {
+      const res  = await fetch('/api/create-session', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+      const data = await res.json();
+      if (data.session_id) {
+        sessionId  = data.session_id;
+        techToken  = data.tech_token || '';
+        updateSessionUI();
+        if (ws) { ws.onclose = null; ws.close(); }
+        connectWs();
+        showToast('Session created: ' + sessionId);
+      }
+    } catch(e) { showToast('Failed to create session'); }
+  }
+
+  function copyCustomerLink() {
+    const url = document.getElementById('customer-session-link').textContent;
+    navigator.clipboard.writeText(url).then(() => showToast('Customer link copied!')).catch(() => showToast('Copy failed'));
+  }
+  function openCustomerLink() {
+    const url = document.getElementById('customer-session-link').href;
+    if (url && url !== '#') window.open(url, '_blank');
+  }
+
+  // ── ACTIVE SESSIONS DASHBOARD ──────────────────────────────
+  let dashTimer = null;
+  async function refreshSessions() {
+    try {
+      const res  = await fetch('/api/active-sessions');
+      const list = await res.json();
+      renderSessionsDash(list);
+    } catch(e) {}
+    dashTimer = setTimeout(refreshSessions, 5000);
+  }
+
+  function renderSessionsDash(sessions) {
+    const grid = document.getElementById('sessions-grid');
+    if (!sessions || !sessions.length) {
+      grid.innerHTML = '<div class="sessions-empty">No active sessions on server.</div>';
+      return;
+    }
+    grid.innerHTML = sessions.map(s => {
+      const isPending = s.service_requested;
+      const cls = isPending ? 'service-pending' : s.nexiq_connected ? 'active' : 'idle';
+      const badge = isPending ? '<span class="si-status-badge service">Service Request</span>'
+                  : s.nexiq_connected ? '<span class="si-status-badge active">Adapter Online</span>'
+                  : '<span class="si-status-badge idle">Standby</span>';
+      const truck = s.truck_info ? `${s.truck_info.year} ${s.truck_info.make} ${s.truck_info.model}` : 'No vehicle ID';
+      const faults = s.fault_code_count > 0 ? `<div class="si-faults">⚠ ${s.fault_code_count} fault code${s.fault_code_count > 1 ? 's' : ''}</div>` : '';
+      return `
+        <div class="session-item ${cls}" onclick="switchSession('${s.session_id}')">
+          <div class="si-top"><span class="si-id">${s.session_id}</span>${badge}</div>
+          <div class="si-truck">${truck}</div>
+          <div class="si-nexiq">${s.nexiq_connected ? '● ' + (s.adapter_name || 'Adapter') : '○ Adapter Offline'}</div>
+          ${faults}
+        </div>`;
+    }).join('');
+  }
+
+  function switchSession(id) {
+    if (id === sessionId) return;
+    sessionId = id;
+    updateSessionUI();
+    if (ws) { ws.onclose = null; ws.close(); }
+    connectWs();
+    showToast('Switched to ' + id);
+  }
+
+  // ── HELPERS ────────────────────────────────────────────────
+  function ts() { return new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+
+  function addLog(msg, cmd, rowClass='fresh') {
+    const el = document.getElementById('log-list');
+    const row = document.createElement('div');
+    row.className = 'log-row ' + rowClass;
+    row.innerHTML = `<span class="log-ts">${ts()}</span><span class="log-msg">${msg}</span><span class="log-cmd">${cmd}</span>`;
+    el.prepend(row);
+    setTimeout(()=>row.classList.remove('fresh'),500);
+    while (el.children.length > 30) el.removeChild(el.lastChild);
+  }
+
+  function flashVal(id) {
+    const el = document.getElementById(id); if (!el) return;
+    el.classList.remove('lit'); void el.offsetWidth; el.classList.add('lit');
+  }
+
+  function updatePriorityDisplay(priority) {
+    const el = document.getElementById('live-priority'); if (!el) return;
+    el.textContent = (priority||'—').toUpperCase();
+    el.className = 'm-value prio-' + (priority||'info');
+  }
+  function updateModalDisplay(show_modal) {
+    const el = document.getElementById('live-show-modal'); if (!el) return;
+    el.textContent = show_modal ? 'ACTIVE' : 'OFF';
+    el.className = 'm-value ' + (show_modal ? 'modal-on' : 'modal-off');
+  }
+
+  // ── TRUCK / LIVE / FAULT RENDER ────────────────────────────
+  function renderTruckInfo(t) {
+    const grid = document.getElementById('truck-grid');
+    if (!t) { grid.innerHTML = '<div class="truck-cell span2"><div class="tc-label">Status</div><div class="tc-value" style="color:var(--titanium);font-size:12px;">Awaiting vehicle ID</div></div>'; return; }
+    grid.innerHTML = `
+      <div class="truck-cell span2"><div class="tc-label">VIN</div><div class="tc-value" style="font-size:11px;letter-spacing:.06em;">${t.vin||'—'}</div></div>
+      <div class="truck-cell"><div class="tc-label">Make / Model</div><div class="tc-value">${t.make||'—'} ${t.model||''}</div></div>
+      <div class="truck-cell"><div class="tc-label">Year</div><div class="tc-value">${t.year||'—'}</div></div>
+      <div class="truck-cell"><div class="tc-label">Engine</div><div class="tc-value">${t.engine||'—'}</div></div>
+      <div class="truck-cell"><div class="tc-label">Odometer</div><div class="tc-value">${t.odometer ? Number(t.odometer).toLocaleString()+' mi' : '—'}</div></div>`;
+  }
+
+  function renderGauges(d) {
+    if (!d) return;
+    const grid = document.getElementById('gauge-grid');
+    const gauges = [
+      { label:'RPM',       val: d.engine_rpm     != null ? Math.round(d.engine_rpm).toLocaleString() : '—', unit:'RPM' },
+      { label:'Speed',     val: d.vehicle_speed  != null ? d.vehicle_speed.toFixed(1) : '—',              unit:'km/h' },
+      { label:'Coolant',   val: d.coolant_temp   != null ? d.coolant_temp.toFixed(0) : '—',               unit:'°C' },
+      { label:'Oil Press', val: d.oil_pressure   != null ? d.oil_pressure.toFixed(0) : '—',               unit:'kPa' },
+      { label:'Boost',     val: d.boost_pressure != null ? d.boost_pressure.toFixed(0) : '—',             unit:'kPa' },
+      { label:'Battery',   val: d.battery_voltage!= null ? d.battery_voltage.toFixed(1) : '—',            unit:'V' },
+    ];
+    grid.innerHTML = gauges.map(g => `
+      <div class="gauge-cell">
+        <div class="gc-label">${g.label}</div>
+        <div class="gc-value">${g.val}</div>
+        <div class="gc-unit">${g.unit}</div>
+      </div>`).join('');
+  }
+
+  function renderFaultCodes(codes) {
+    const list  = document.getElementById('fault-list');
+    const badge = document.getElementById('fault-count-badge');
+    const active = (codes||[]).filter(c => c.active).length;
+    badge.textContent = active > 0 ? `${active} Active` : '';
+    if (!codes || !codes.length) {
+      list.innerHTML = '<div class="fault-empty">No fault codes detected.</div>';
+      return;
+    }
+    list.innerHTML = codes.map(c => `
+      <div class="fault-row${c.active ? '' : ' inactive'}">
+        <div class="fault-spn">SPN ${c.spn}<br><span style="font-size:8px;font-weight:400;">FMI ${c.fmi}</span></div>
+        <div class="fault-info">
+          <div class="fault-desc">${c.description||'Unknown'}</div>
+          <div class="fault-meta">${c.source||''} · Count: ${c.count||1}</div>
+        </div>
+        <div class="fault-badge ${c.active ? 'active' : 'stored'}">${c.active ? '● ACTIVE' : '○ STORED'}</div>
+      </div>`).join('');
+  }
+
+  // ── EVENT LOG ──────────────────────────────────────────────
+  function renderEventLog(events) {
+    const el = document.getElementById('event-log');
+    if (!events || events.length === 0) { el.innerHTML = '<div class="log-empty">No events yet.</div>'; return; }
+    el.innerHTML = [...events].reverse().map(ev => {
+      const cls = 'ev-' + (ev.kind || ev.priority || 'info');
+      return `<div class="log-row event-row"><span class="log-ts">${ev.timestamp||'—'}</span><span class="log-msg">${ev.message||''}</span><span class="log-cmd ${cls}">${(ev.kind||'info').toUpperCase()}</span></div>`;
+    }).join('');
+  }
+
+  // ── APPLY SESSION DATA ─────────────────────────────────────
+  function applySessionData(d) {
+    const changed    = d.status !== lastStatus || d.command !== lastCommand;
+    const ackChanged = d.customer_ack !== lastAck || d.customer_message !== lastMsg;
+
+    document.getElementById('live-status').textContent   = d.status  || '—';
+    document.getElementById('live-command').textContent  = d.command || '—';
+    document.getElementById('live-requires-ack').textContent = d.requires_ack ? 'YES' : 'NO';
+    updatePriorityDisplay(d.priority);
+    updateModalDisplay(d.show_modal);
+
+    const ackEl = document.getElementById('live-customer-ack');
+    ackEl.textContent = d.customer_ack ? 'CONFIRMED' : 'PENDING';
+    ackEl.className   = 'm-value ' + (d.customer_ack ? 'ack-yes' : 'ack-no');
+    document.getElementById('live-customer-message').textContent = d.customer_message || '—';
+
+    if (changed && lastStatus) { addLog(d.status, d.command); flashVal('live-status'); flashVal('live-command'); }
+    if (ackChanged && lastAck !== null) {
+      addLog('Customer: ' + (d.customer_message||'(no message)'), d.customer_ack ? '✓ ACK' : '⚠ HELP', d.customer_ack ? 'ack-row' : 'help-row');
+    }
+    if (d.event_log) renderEventLog(d.event_log);
+
+    // Nexiq
+    const pill = document.getElementById('nexiq-pill');
+    if (d.nexiq_connected) {
+      pill.className = 'nexiq-status-pill connected';
+      pill.textContent = d.adapter_name || 'Adapter Online';
+    } else {
+      pill.className = 'nexiq-status-pill disconnected';
+      pill.textContent = 'Adapter Offline';
+    }
+
+    renderTruckInfo(d.truck_info || null);
+    renderGauges(d.live_data || null);
+    renderFaultCodes(d.fault_codes || []);
+
+    // Service request alert
+    if (d.service_requested && d.service_request_time) {
+      const existing = document.getElementById('srv-alert');
+      if (!existing) {
+        const alert = document.createElement('div');
+        alert.id = 'srv-alert';
+        alert.style.cssText = 'position:fixed;top:20px;right:20px;z-index:900;background:rgba(243,156,18,.12);border:1px solid var(--warn-orange);border-radius:10px;padding:14px 20px;font-family:Orbitron,sans-serif;font-size:9px;letter-spacing:.12em;color:var(--warn-orange);cursor:pointer;animation:alertPulse 2s ease-in-out infinite;max-width:260px;';
+        alert.innerHTML = `⚠ SERVICE REQUEST<br><span style="font-family:Rajdhani;font-size:12px;color:var(--text-primary);letter-spacing:.04em;">Driver has requested a technician.<br><span style="color:var(--titanium);">${sessionId}</span></span>`;
+        alert.onclick = () => alert.remove();
+        document.body.appendChild(alert);
+      }
+    }
+
+    lastStatus = d.status; lastCommand = d.command;
+    lastAck = d.customer_ack; lastMsg = d.customer_message;
+  }
+
+  // ── SEND COMMAND ───────────────────────────────────────────
+  async function send(status, command, requires_ack, priority, show_modal, btn) {
+    btn.classList.add('fired');
+    setTimeout(()=>btn.classList.remove('fired'), 500);
+    try {
+      await fetch(`/api/update/${encodeURIComponent(sessionId)}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ tech_token: techToken, status, command, requires_ack, priority, show_modal })
+      });
+    } catch(e) {}
+    document.getElementById('live-status').textContent  = status;
+    document.getElementById('live-command').textContent = command;
+    document.getElementById('live-requires-ack').textContent = requires_ack ? 'YES' : 'NO';
+    updatePriorityDisplay(priority);
+    updateModalDisplay(show_modal);
+    flashVal('live-status'); flashVal('live-command');
+    addLog(status, command + (requires_ack?' [ACK]':'') + (show_modal?' [MODAL]':''));
+    lastStatus = status; lastCommand = command;
+  }
+
+  // ── TOAST ──────────────────────────────────────────────────
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  }
+
+  // ── WEBSOCKET ──────────────────────────────────────────────
+  function setWsStatus(state) {
+    const dot   = document.getElementById('ws-dot');
+    const label = document.getElementById('ws-label');
+    dot.className   = 'ws-dot ' + state;
+    label.textContent = state === 'connected' ? 'Live' : state === 'reconnecting' ? 'Reconnecting' : 'Offline';
+  }
+
+  function connectWs() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/ws?session=${encodeURIComponent(sessionId)}`);
+    ws.onopen    = () => { setWsStatus('connected'); if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; } };
+    ws.onmessage = (evt) => { try { applySessionData(JSON.parse(evt.data)); } catch(e) {} };
+    ws.onclose   = () => { setWsStatus('reconnecting'); wsReconnectTimer = setTimeout(connectWs, 2000); };
+    ws.onerror   = () => { ws.close(); };
+  }
+
+  // ── BOOT ──────────────────────────────────────────────────
+  updateSessionUI();
+  fetch(`/api/session/${encodeURIComponent(sessionId)}`)
+    .then(r => r.json())
+    .then(applySessionData)
+    .catch(()=>{})
+    .finally(()=> connectWs());
+
+  refreshSessions();
+</script>
+</body>
+</html>

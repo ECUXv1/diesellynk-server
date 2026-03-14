@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DieselLynk — Live Session</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --obsidian:#0A0A0A;--carbon:#1A1A1A;--steel:#3A3A3A;--titanium:#8A8A8A;
+      --gold:#D4AF37;--gold-bright:#F0CE5E;--gold-dim:#9A7D20;
+      --text-primary:#F0EAD6;--text-muted:#8A8A8A;
+      --success:#58D68D;--danger:#FF6B6B;--warn:#F39C12;--info:#5DADE2;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    html,body{width:100%;min-height:100%;overflow-x:hidden;}
+    body{background:var(--obsidian);color:var(--text-primary);font-family:'Rajdhani',sans-serif;}
+
+    /* Background */
+    .cf-bg{position:fixed;inset:0;z-index:0;
+      background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.018) 0px,rgba(255,255,255,.018) 1px,transparent 1px,transparent 10px),
+        repeating-linear-gradient(-45deg,rgba(255,255,255,.018) 0px,rgba(255,255,255,.018) 1px,transparent 1px,transparent 10px);
+      background-color:var(--carbon);}
+    .glow-center{position:fixed;inset:0;z-index:1;pointer-events:none;
+      background:radial-gradient(ellipse 70% 55% at 50% 38%,rgba(212,175,55,.10) 0%,transparent 65%);
+      animation:breathe 5s ease-in-out infinite;}
+    @keyframes breathe{0%,100%{opacity:.7}50%{opacity:1}}
+
+    /* Corners */
+    .corner{position:fixed;width:50px;height:50px;z-index:10;}
+    .corner::before,.corner::after{content:'';position:absolute;background:var(--gold);}
+    .corner::before{width:2px;height:100%;}.corner::after{width:100%;height:2px;}
+    .corner.tl{top:22px;left:22px}.corner.tr{top:22px;right:22px;transform:scaleX(-1)}
+    .corner.bl{bottom:22px;left:22px;transform:scaleY(-1)}.corner.br{bottom:22px;right:22px;transform:scale(-1)}
+    .cdot{position:fixed;width:6px;height:6px;border-radius:50%;background:var(--gold);z-index:11;box-shadow:0 0 10px var(--gold);animation:dotP 2s ease-in-out infinite;}
+    @keyframes dotP{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
+    .cd-tl{top:19px;left:19px}.cd-tr{top:19px;right:19px}.cd-bl{bottom:19px;left:19px}.cd-br{bottom:19px;right:19px}
+
+    /* Session pill */
+    .session-pill{position:fixed;top:14px;right:76px;z-index:20;display:flex;align-items:center;gap:6px;
+      font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.18em;text-transform:uppercase;
+      color:var(--titanium);background:rgba(26,26,26,.7);border:1px solid var(--steel);
+      border-radius:12px;padding:4px 10px;backdrop-filter:blur(6px);}
+    .session-pill-dot{width:5px;height:5px;border-radius:50%;background:var(--gold-dim);}
+
+    /* Particles */
+    .particles{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden;}
+    .particle{position:absolute;border-radius:50%;width:2px;height:2px;background:var(--gold);opacity:0;animation:fU linear infinite;}
+    @keyframes fU{0%{transform:translateY(105vh);opacity:0}8%{opacity:.6}92%{opacity:.2}100%{transform:translateY(-5vh) translateX(30px);opacity:0}}
+
+    /* Main scene */
+    .scene{position:relative;z-index:5;display:flex;flex-direction:column;align-items:center;padding:60px 24px 80px;gap:0;}
+
+    /* Logo */
+    .logo-wrap{animation:dropIn 1s cubic-bezier(.22,1,.36,1) both;}
+    @keyframes dropIn{from{opacity:0;transform:translateY(-50px) scale(.88)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .logo-wrap img{width:clamp(180px,25vw,280px);filter:drop-shadow(0 0 20px rgba(212,175,55,.55)) drop-shadow(0 0 60px rgba(212,175,55,.2));animation:logoS 4s ease-in-out infinite;}
+    @keyframes logoS{0%,100%{filter:drop-shadow(0 0 20px rgba(212,175,55,.5)) drop-shadow(0 0 50px rgba(212,175,55,.15))}50%{filter:drop-shadow(0 0 36px rgba(240,206,94,.85)) drop-shadow(0 0 80px rgba(212,175,55,.35))}}
+    .text-logo{font-family:'Orbitron',sans-serif;font-size:clamp(42px,7vw,86px);font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#D4AF37;text-shadow:0 0 20px rgba(212,175,55,.35);animation:fadeUp .8s .35s both;line-height:1;}
+    .tagline{font-family:'Orbitron',sans-serif;font-size:clamp(9px,1.2vw,12px);font-weight:600;letter-spacing:.4em;text-transform:uppercase;color:var(--titanium);margin-top:5px;animation:fadeUp .8s .45s both;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+    .divider{width:clamp(180px,44vw,440px);height:1px;margin:18px auto;background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold),var(--gold-bright),var(--gold),var(--gold-dim),transparent);position:relative;animation:fadeUp .8s .5s both;}
+    .divider::before{content:'';position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:10px;height:10px;border-radius:50%;background:var(--gold);box-shadow:0 0 16px var(--gold),0 0 30px rgba(212,175,55,.4);animation:dotP 2.5s ease-in-out infinite;}
+
+    /* Main status panel */
+    .panel{background:rgba(26,26,26,.85);border:1px solid var(--steel);border-radius:14px;padding:28px 40px 24px;width:clamp(280px,56vw,580px);text-align:center;position:relative;backdrop-filter:blur(16px);overflow:hidden;animation:fadeUp .9s .6s cubic-bezier(.22,1,.36,1) both;}
+    .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold-bright),var(--gold-dim),transparent);}
+    .badge-row{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+    .live-badge{display:inline-flex;align-items:center;gap:8px;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.25);border-radius:20px;padding:5px 14px;}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);animation:dotP 1.3s ease-in-out infinite;}
+    .ws-dot{width:7px;height:7px;border-radius:50%;background:var(--steel);transition:background .4s,box-shadow .4s;}
+    .ws-dot.connected{background:var(--success);box-shadow:0 0 8px var(--success);}
+    .ws-dot.reconnecting{background:var(--warn);box-shadow:0 0 8px var(--warn);animation:dotP .6s ease-in-out infinite;}
+    .ws-label{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.15em;color:var(--titanium);}
+    .nexiq-badge{display:inline-flex;align-items:center;gap:8px;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.18em;text-transform:uppercase;border-radius:20px;padding:5px 14px;transition:all .4s;}
+    .nexiq-badge.connected{color:var(--success);background:rgba(88,214,141,.08);border:1px solid rgba(88,214,141,.3);}
+    .nexiq-badge.disconnected{color:var(--titanium);background:rgba(58,58,58,.4);border:1px solid var(--steel);}
+    .nexiq-dot{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor;}
+    .status-text{font-family:'Orbitron',sans-serif;font-size:clamp(16px,2.6vw,22px);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);margin-bottom:10px;}
+    .command-text{font-family:'Rajdhani',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:500;color:var(--gold);letter-spacing:.06em;min-height:26px;}
+    .command-text::after{content:'▮';animation:cursor .9s step-end infinite;color:var(--gold-bright);margin-left:4px;}
+    @keyframes cursor{0%,100%{opacity:1}50%{opacity:0}}
+    .spinner-wrap{margin:22px auto 0;position:relative;width:90px;height:90px;animation:fadeUp .8s .8s both;}
+    .ring{position:absolute;inset:0;border-radius:50%;border:3px solid transparent;}
+    .r-outer{border-top-color:var(--gold);border-right-color:var(--gold-dim);animation:sCW 2s linear infinite;box-shadow:0 0 18px rgba(212,175,55,.4);}
+    .r-mid{inset:13px;border-bottom-color:var(--gold-bright);border-left-color:rgba(212,175,55,.3);animation:sCCW 1.3s linear infinite;}
+    .r-inner{inset:26px;border-top-color:var(--steel);border-right-color:var(--titanium);animation:sCW .9s linear infinite;}
+    .r-core{position:absolute;inset:38px;border-radius:50%;background:radial-gradient(circle,rgba(212,175,55,.35) 0%,transparent 70%);animation:cP 2.5s ease-in-out infinite;}
+    @keyframes sCW{to{transform:rotate(360deg)}}@keyframes sCCW{to{transform:rotate(-360deg)}}
+    @keyframes cP{0%,100%{transform:scale(.7);opacity:.5}50%{transform:scale(1.15);opacity:1}}
+    .bars{display:flex;align-items:flex-end;justify-content:center;gap:4px;height:26px;margin-top:20px;animation:fadeUp .8s 1s both;}
+    .bar{width:4px;border-radius:2px;background:var(--gold-dim);animation:bD 1s ease-in-out infinite;}
+    .bar:nth-child(3n){background:var(--gold)}.bar:nth-child(5n){background:var(--titanium)}
+    @keyframes bD{0%,100%{height:4px;opacity:.3}50%{height:22px;opacity:1}}
+
+    /* Ack area */
+    .ack-area{margin-top:20px;display:none;flex-direction:column;align-items:center;gap:12px;}
+    .ack-area.show{display:flex;}
+    .ack-label{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--titanium);}
+    .ack-btns{display:flex;gap:14px;}
+    .ack-btn{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:12px 28px;border:none;border-radius:8px;cursor:pointer;transition:transform .15s,box-shadow .2s;}
+    .ack-btn:hover{transform:translateY(-2px);}.ack-btn:active{transform:scale(.97);}
+    .btn-done{background:linear-gradient(135deg,#1E6B3F,#27AE60);color:#fff;box-shadow:0 4px 18px rgba(88,214,141,.25);}
+    .btn-done:hover{box-shadow:0 6px 24px rgba(88,214,141,.45);}
+    .btn-help{background:linear-gradient(135deg,#8B1A1A,#C0392B);color:#fff;box-shadow:0 4px 18px rgba(255,107,107,.2);}
+    .btn-help:hover{box-shadow:0 6px 24px rgba(255,107,107,.4);}
+    .reply-note{margin-top:14px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:500;color:var(--titanium);letter-spacing:.04em;min-height:20px;}
+
+    /* ── SERVICE REQUEST BUTTON ──────────────────────────────── */
+    .service-request-wrap{width:clamp(280px,56vw,580px);margin-top:20px;animation:fadeUp .9s .75s cubic-bezier(.22,1,.36,1) both;}
+    .service-request-btn{
+      width:100%;padding:20px 28px;border:none;border-radius:14px;cursor:pointer;
+      background:linear-gradient(135deg,rgba(212,175,55,.15),rgba(212,175,55,.08));
+      border:1px solid rgba(212,175,55,.4);
+      font-family:'Orbitron',sans-serif;font-size:clamp(11px,1.4vw,14px);
+      font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);
+      position:relative;overflow:hidden;transition:all .3s;
+    }
+    .service-request-btn::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:2px;
+      background:linear-gradient(90deg,transparent,var(--gold-bright),transparent);
+      transform:scaleX(0);transition:transform .3s;
+    }
+    .service-request-btn:hover{background:linear-gradient(135deg,rgba(212,175,55,.25),rgba(212,175,55,.12));box-shadow:0 8px 32px rgba(212,175,55,.2);transform:translateY(-2px);}
+    .service-request-btn:hover::before{transform:scaleX(1);}
+    .service-request-btn:active{transform:scale(.98);}
+    .service-request-btn.sent{color:var(--success);border-color:rgba(88,214,141,.4);background:rgba(88,214,141,.08);cursor:default;}
+    .service-request-btn.sent::before{background:linear-gradient(90deg,transparent,var(--success),transparent);transform:scaleX(1);}
+    .srv-btn-inner{display:flex;align-items:center;justify-content:center;gap:14px;}
+    .srv-btn-icon{font-size:22px;}
+    .srv-btn-text{text-align:left;}
+    .srv-btn-title{font-size:clamp(11px,1.4vw,14px);font-weight:700;letter-spacing:.12em;}
+    .srv-btn-sub{font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:500;color:rgba(212,175,55,.6);letter-spacing:.06em;margin-top:2px;display:block;}
+    .service-request-btn.sent .srv-btn-sub{color:rgba(88,214,141,.6);}
+
+    /* ── TRUCK DATA PANEL ────────────────────────────────────── */
+    .data-section{width:clamp(280px,56vw,580px);margin-top:18px;animation:fadeUp .9s .85s cubic-bezier(.22,1,.36,1) both;}
+    .data-panel{background:rgba(26,26,26,.85);border:1px solid var(--steel);border-radius:14px;overflow:hidden;backdrop-filter:blur(16px);transition:all .4s;}
+    .data-panel.hidden{display:none;}
+    .data-panel-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:rgba(0,0,0,.3);border-bottom:1px solid var(--steel);position:relative;}
+    .data-panel-hdr::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold-dim),transparent);}
+    .data-panel-title{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold-dim);}
+
+    /* Truck info row */
+    .truck-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--steel);}
+    .truck-info-cell{background:rgba(26,26,26,.95);padding:12px 16px;}
+    .truck-info-label{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.18em;color:var(--titanium);margin-bottom:4px;}
+    .truck-info-value{font-family:'Orbitron',sans-serif;font-size:clamp(10px,1.4vw,13px);font-weight:600;color:var(--text-primary);}
+    .truck-info-cell.span2{grid-column:span 2;}
+
+    /* Live data gauges */
+    .live-data-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--steel);}
+    .live-gauge{background:rgba(26,26,26,.95);padding:14px 12px;text-align:center;}
+    .gauge-label{font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:var(--titanium);margin-bottom:6px;}
+    .gauge-value{font-family:'Orbitron',sans-serif;font-size:clamp(16px,2.2vw,22px);font-weight:700;color:var(--gold);line-height:1;animation:litVal .4s ease;}
+    @keyframes litVal{from{color:var(--gold-bright)}to{color:var(--gold)}}
+    .gauge-unit{font-family:'Rajdhani',sans-serif;font-size:10px;color:var(--titanium);margin-top:2px;}
+
+    /* Fault codes */
+    .fault-list{padding:12px 16px;display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;}
+    .fault-list::-webkit-scrollbar{width:3px;}.fault-list::-webkit-scrollbar-thumb{background:var(--steel);border-radius:2px;}
+    .fault-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(0,0,0,.3);border-radius:8px;border-left:3px solid var(--danger);}
+    .fault-row.inactive{border-left-color:var(--titanium);}
+    .fault-spn{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;color:var(--danger);white-space:nowrap;}
+    .fault-row.inactive .fault-spn{color:var(--titanium);}
+    .fault-info{flex:1;}
+    .fault-desc{font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;color:var(--text-primary);}
+    .fault-meta{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--titanium);margin-top:2px;}
+    .fault-count{font-family:'Orbitron',sans-serif;font-size:10px;color:var(--gold);background:rgba(212,175,55,.1);border:1px solid rgba(212,175,55,.2);border-radius:10px;padding:2px 8px;white-space:nowrap;}
+    .fault-empty{font-family:'Rajdhani',sans-serif;font-size:14px;color:var(--titanium);padding:16px;text-align:center;}
+
+    /* MODAL */
+    #command-modal{display:none;position:fixed;inset:0;z-index:500;align-items:center;justify-content:center;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);}
+    #command-modal.visible{display:flex;animation:modalIn .35s cubic-bezier(.22,1,.36,1);}
+    @keyframes modalIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+    .modal-box{position:relative;background:rgba(26,26,26,.96);border:1px solid var(--steel);border-radius:16px;padding:44px 52px 40px;width:clamp(300px,80vw,640px);text-align:center;overflow:hidden;}
+    .modal-box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);transition:background .3s;}
+    #modal-priority{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.25em;text-transform:uppercase;padding:5px 16px;border-radius:20px;display:inline-block;margin-bottom:22px;border:1px solid currentColor;}
+    #modal-command{font-family:'Orbitron',sans-serif;font-size:clamp(26px,5vw,52px);font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);line-height:1.15;margin-bottom:16px;text-shadow:0 0 30px rgba(212,175,55,.2);}
+    #modal-subtext{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:500;color:var(--titanium);letter-spacing:.04em;margin-bottom:28px;}
+    .modal-ack-btns{display:none;gap:14px;justify-content:center;margin-top:4px;}
+    .modal-box.priority-info::before{background:linear-gradient(90deg,transparent,#5DADE2,transparent);}
+    #modal-priority.priority-info{color:#5DADE2;}
+    .modal-box.priority-action::before{background:linear-gradient(90deg,transparent,var(--gold-bright),transparent);}
+    #modal-priority.priority-action{color:var(--gold);}
+    .modal-box.priority-warning::before{background:linear-gradient(90deg,transparent,#F39C12,transparent);}
+    .modal-box.priority-warning{border-color:rgba(243,156,18,.45);}
+    #modal-priority.priority-warning{color:#F39C12;}
+    .modal-box.priority-critical::before{background:linear-gradient(90deg,transparent,#E74C3C,transparent);}
+    .modal-box.priority-critical{border-color:rgba(231,76,60,.5);animation:critPulse 2s ease-in-out infinite;}
+    #modal-priority.priority-critical{color:#E74C3C;}
+    #modal-command.priority-critical{color:#FF6B6B;text-shadow:0 0 30px rgba(231,76,60,.35);}
+    @keyframes critPulse{0%,100%{box-shadow:0 0 40px rgba(231,76,60,.15)}50%{box-shadow:0 0 70px rgba(231,76,60,.38)}}
+
+    /* Footer */
+    .footer{position:fixed;bottom:26px;left:0;right:0;z-index:10;display:flex;justify-content:center;align-items:center;gap:18px;animation:fadeUp .8s 1.2s both;}
+    .footer-text{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--steel);}
+    .footer-line{width:36px;height:1px;background:var(--steel);}
+  </style>
+</head>
+<body>
+  <div class="cf-bg"></div>
+  <div class="glow-center"></div>
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+  <div class="cdot cd-tl"></div><div class="cdot cd-tr"></div>
+  <div class="cdot cd-bl"></div><div class="cdot cd-br"></div>
+  <div class="particles" id="particles"></div>
+
+  <div class="session-pill">
+    <span class="session-pill-dot"></span>
+    <span id="session-pill-label">—</span>
+  </div>
+
+  <div class="scene">
+    <div class="logo-wrap">
+      <!-- inline shield SVG placeholder — replace with your actual logo -->
+    </div>
+    <div class="text-logo">DieselLynk</div>
+    <div class="tagline">The Intelligence Network</div>
+    <div class="divider"></div>
+
+    <!-- ── STATUS PANEL ────────────────────────────────────── -->
+    <div class="panel">
+      <div class="badge-row">
+        <div class="live-badge"><span class="live-dot"></span>Live Session Active</div>
+        <div class="live-badge">
+          <span class="ws-dot" id="ws-dot"></span>
+          <span class="ws-label" id="ws-label">Connecting</span>
+        </div>
+        <div class="nexiq-badge disconnected" id="nexiq-badge">
+          <span class="nexiq-dot"></span>
+          <span id="nexiq-label">Adapter Offline</span>
+        </div>
+      </div>
+      <div class="status-text" id="status">Awaiting Technician</div>
+      <div class="command-text" id="command">Session created — standby</div>
+
+      <div class="spinner-wrap">
+        <div class="ring r-outer"></div><div class="ring r-mid"></div>
+        <div class="ring r-inner"></div><div class="r-core"></div>
+      </div>
+      <div class="bars" id="bars"></div>
+
+      <div class="ack-area" id="ack-area">
+        <div class="ack-label">Technician is waiting for your response</div>
+        <div class="ack-btns">
+          <button class="ack-btn btn-done" onclick="sendReply(true,'Customer completed requested step')">&#10003; Done</button>
+          <button class="ack-btn btn-help" onclick="sendReply(false,'Customer needs help')">&#33; Need Help</button>
+        </div>
+      </div>
+      <div class="reply-note" id="reply-note"></div>
+    </div>
+
+    <!-- ── SERVICE REQUEST BUTTON ──────────────────────────── -->
+    <div class="service-request-wrap">
+      <button class="service-request-btn" id="service-request-btn" onclick="requestService()">
+        <div class="srv-btn-inner">
+          <span class="srv-btn-icon">🛠</span>
+          <div class="srv-btn-text">
+            <div class="srv-btn-title">Request Technician</div>
+            <span class="srv-btn-sub">Connect me to a DieselLynk tech now</span>
+          </div>
+          <span class="srv-btn-icon">→</span>
+        </div>
+      </button>
+    </div>
+
+    <!-- ── TRUCK INFO PANEL ────────────────────────────────── -->
+    <div class="data-section">
+
+      <!-- Truck identity -->
+      <div class="data-panel hidden" id="truck-panel">
+        <div class="data-panel-hdr">
+          <span class="data-panel-title">🚛 Vehicle Identification</span>
+        </div>
+        <div class="truck-info-grid" id="truck-info-grid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <!-- Live gauges -->
+      <div class="data-panel hidden" id="live-panel" style="margin-top:12px;">
+        <div class="data-panel-hdr">
+          <span class="data-panel-title">⚡ Live Engine Data</span>
+        </div>
+        <div class="live-data-grid" id="live-data-grid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <!-- Fault codes -->
+      <div class="data-panel hidden" id="fault-panel" style="margin-top:12px;">
+        <div class="data-panel-hdr">
+          <span class="data-panel-title">⚠ Active Fault Codes</span>
+          <span id="fault-count-badge" style="font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.12em;color:var(--danger);"></span>
+        </div>
+        <div class="fault-list" id="fault-list">
+          <div class="fault-empty">No fault codes detected.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL -->
+  <div id="command-modal">
+    <div class="modal-box">
+      <div id="modal-priority">INFO</div>
+      <div id="modal-command">Command</div>
+      <div id="modal-subtext">Please complete this step and respond below.</div>
+      <div class="modal-ack-btns" id="modal-ack-btns">
+        <button class="ack-btn btn-done" onclick="sendReply(true,'Customer completed requested step')">&#10003; Done</button>
+        <button class="ack-btn btn-help" onclick="sendReply(false,'Customer needs help')">&#33; Need Help</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-line"></div>
+    <div class="footer-text">Secure Diagnostic Feed</div>
+    <div class="footer-line"></div>
+  </div>
+
+  <script>
+    // ── URL PARAMS ────────────────────────────────────────────
+    const params     = new URLSearchParams(location.search);
+    const sessionId  = params.get('session') || 'DL-default';
+    const driverToken = params.get('token') || '';
+    document.getElementById('session-pill-label').textContent = sessionId;
+
+    // ── PARTICLES & BARS ──────────────────────────────────────
+    const pc = document.getElementById('particles');
+    for (let i = 0; i < 24; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.cssText = `left:${Math.random()*100}vw;animation-duration:${8+Math.random()*14}s;animation-delay:${Math.random()*14}s;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;${Math.random()>.7?'background:#8A8A8A;':''}`;
+      pc.appendChild(p);
+    }
+    const bl = document.getElementById('bars');
+    for (let i = 0; i < 20; i++) {
+      const b = document.createElement('div');
+      b.className = 'bar';
+      b.style.cssText = `animation-delay:${Math.random()*1.2}s;animation-duration:${.6+Math.random()*.9}s;`;
+      bl.appendChild(b);
+    }
+
+    const PRIORITIES = ['priority-info','priority-action','priority-warning','priority-critical'];
+    let serviceRequested = false;
+
+    // ── APPLY SESSION DATA ────────────────────────────────────
+    function applySessionData(data) {
+      document.getElementById('status').textContent  = data.status  || '';
+      document.getElementById('command').textContent = data.command || '';
+
+      const ackArea   = document.getElementById('ack-area');
+      const replyNote = document.getElementById('reply-note');
+      if (data.requires_ack && !data.customer_ack) {
+        ackArea.classList.add('show');
+        replyNote.textContent = '';
+      } else {
+        ackArea.classList.remove('show');
+        replyNote.textContent = data.customer_message || '';
+      }
+
+      // Modal
+      const modal    = document.getElementById('command-modal');
+      const modalBox = modal.querySelector('.modal-box');
+      const prioEl   = document.getElementById('modal-priority');
+      const cmdEl    = document.getElementById('modal-command');
+      const modalAck = document.getElementById('modal-ack-btns');
+      if (data.show_modal) {
+        cmdEl.textContent  = data.command || '';
+        prioEl.textContent = (data.priority || 'info').toUpperCase();
+        PRIORITIES.forEach(c => { prioEl.classList.remove(c); modalBox.classList.remove(c); cmdEl.classList.remove(c); });
+        const pClass = 'priority-' + (data.priority || 'info');
+        prioEl.classList.add(pClass);
+        modalBox.classList.add(pClass);
+        if (pClass === 'priority-critical') cmdEl.classList.add(pClass);
+        modalAck.style.display = (data.requires_ack && !data.customer_ack) ? 'flex' : 'none';
+        modal.classList.add('visible');
+      } else {
+        modal.classList.remove('visible');
+      }
+
+      // Nexiq badge
+      const badge = document.getElementById('nexiq-badge');
+      const label = document.getElementById('nexiq-label');
+      if (data.nexiq_connected) {
+        badge.className = 'nexiq-badge connected';
+        label.textContent = data.adapter_name || 'Adapter Online';
+      } else {
+        badge.className = 'nexiq-badge disconnected';
+        label.textContent = 'Adapter Offline';
+      }
+
+      // Truck info
+      if (data.truck_info) renderTruckInfo(data.truck_info);
+
+      // Live data
+      if (data.live_data) renderLiveData(data.live_data);
+
+      // Fault codes
+      renderFaultCodes(data.fault_codes || []);
+
+      // Service request state
+      if (data.service_requested) markServiceSent();
+    }
+
+    // ── TRUCK INFO ────────────────────────────────────────────
+    function renderTruckInfo(t) {
+      const panel = document.getElementById('truck-panel');
+      const grid  = document.getElementById('truck-info-grid');
+      panel.classList.remove('hidden');
+      grid.innerHTML = `
+        <div class="truck-info-cell span2">
+          <div class="truck-info-label">VIN</div>
+          <div class="truck-info-value" style="font-size:11px;letter-spacing:.08em;">${t.vin || '—'}</div>
+        </div>
+        <div class="truck-info-cell">
+          <div class="truck-info-label">Make / Model</div>
+          <div class="truck-info-value">${t.make || '—'} ${t.model || ''}</div>
+        </div>
+        <div class="truck-info-cell">
+          <div class="truck-info-label">Year</div>
+          <div class="truck-info-value">${t.year || '—'}</div>
+        </div>
+        <div class="truck-info-cell">
+          <div class="truck-info-label">Engine</div>
+          <div class="truck-info-value">${t.engine || '—'}</div>
+        </div>
+        <div class="truck-info-cell">
+          <div class="truck-info-label">Odometer</div>
+          <div class="truck-info-value">${t.odometer ? Number(t.odometer).toLocaleString() + ' mi' : '—'}</div>
+        </div>
+      `;
+    }
+
+    // ── LIVE DATA ─────────────────────────────────────────────
+    function renderLiveData(d) {
+      const panel = document.getElementById('live-panel');
+      const grid  = document.getElementById('live-data-grid');
+      panel.classList.remove('hidden');
+      const gauges = [
+        { key:'engine_rpm',    label:'Engine RPM', unit:'RPM',  fmt: v => Math.round(v).toLocaleString() },
+        { key:'vehicle_speed', label:'Speed',      unit:'km/h', fmt: v => v.toFixed(1) },
+        { key:'coolant_temp',  label:'Coolant',    unit:'°C',   fmt: v => v.toFixed(0) },
+        { key:'oil_pressure',  label:'Oil Press',  unit:'kPa',  fmt: v => v.toFixed(0) },
+        { key:'boost_pressure',label:'Boost',      unit:'kPa',  fmt: v => v.toFixed(0) },
+        { key:'battery_voltage',label:'Battery',   unit:'V',    fmt: v => v.toFixed(1) },
+      ];
+      grid.innerHTML = gauges.map(g => `
+        <div class="live-gauge">
+          <div class="gauge-label">${g.label}</div>
+          <div class="gauge-value">${d[g.key] != null ? g.fmt(d[g.key]) : '—'}</div>
+          <div class="gauge-unit">${g.unit}</div>
+        </div>
+      `).join('');
+    }
+
+    // ── FAULT CODES ───────────────────────────────────────────
+    function renderFaultCodes(codes) {
+      const panel = document.getElementById('fault-panel');
+      const list  = document.getElementById('fault-list');
+      const badge = document.getElementById('fault-count-badge');
+      panel.classList.remove('hidden');
+      const active = codes.filter(c => c.active).length;
+      badge.textContent = active > 0 ? `${active} Active` : '';
+      if (!codes.length) {
+        list.innerHTML = '<div class="fault-empty">No fault codes detected.</div>';
+        return;
+      }
+      list.innerHTML = codes.map(c => `
+        <div class="fault-row${c.active ? '' : ' inactive'}">
+          <div class="fault-spn">SPN ${c.spn}<br><span style="font-size:9px;font-weight:400;">FMI ${c.fmi}</span></div>
+          <div class="fault-info">
+            <div class="fault-desc">${c.description || 'Unknown'}</div>
+            <div class="fault-meta">${c.source || ''} · Count: ${c.count || 1}</div>
+          </div>
+          <div class="fault-count">${c.active ? '● ACTIVE' : '○ STORED'}</div>
+        </div>
+      `).join('');
+    }
+
+    // ── SERVICE REQUEST ───────────────────────────────────────
+    async function requestService() {
+      if (serviceRequested) return;
+      const btn = document.getElementById('service-request-btn');
+      btn.style.opacity = '.6';
+      btn.style.cursor = 'wait';
+      try {
+        await fetch(`/api/service-request/${encodeURIComponent(sessionId)}`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ driver_token: driverToken, service_type: 'diesellynk_tech' })
+        });
+      } catch(e) {}
+      markServiceSent();
+    }
+
+    function markServiceSent() {
+      if (serviceRequested) return;
+      serviceRequested = true;
+      const btn = document.getElementById('service-request-btn');
+      btn.className = 'service-request-btn sent';
+      btn.style.opacity = '1';
+      btn.style.cursor = 'default';
+      btn.innerHTML = `
+        <div class="srv-btn-inner">
+          <span class="srv-btn-icon">✓</span>
+          <div class="srv-btn-text">
+            <div class="srv-btn-title">Technician Requested</div>
+            <span class="srv-btn-sub">Connecting you to a technician — stand by</span>
+          </div>
+        </div>`;
+    }
+
+    // ── WEBSOCKET ─────────────────────────────────────────────
+    let ws = null, wsReconnectTimer = null;
+
+    function setWsStatus(state) {
+      const dot   = document.getElementById('ws-dot');
+      const label = document.getElementById('ws-label');
+      dot.className   = 'ws-dot ' + state;
+      label.textContent = state === 'connected' ? 'Live' : state === 'reconnecting' ? 'Reconnecting' : 'Offline';
+    }
+
+    function connectWs() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/ws?session=${encodeURIComponent(sessionId)}`);
+      ws.onopen    = () => { setWsStatus('connected'); if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; } };
+      ws.onmessage = (evt) => { try { applySessionData(JSON.parse(evt.data)); } catch(e) {} };
+      ws.onclose   = () => { setWsStatus('reconnecting'); wsReconnectTimer = setTimeout(connectWs, 2000); };
+      ws.onerror   = () => { ws.close(); };
+    }
+
+    // ── CUSTOMER REPLY ────────────────────────────────────────
+    async function sendReply(customer_ack, customer_message) {
+      await fetch(`/api/customer-reply/${encodeURIComponent(sessionId)}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ driver_token: driverToken, customer_ack, customer_message })
+      });
+    }
+
+    // ── BOOT ──────────────────────────────────────────────────
+    fetch(`/api/session/${encodeURIComponent(sessionId)}`)
+      .then(r => r.json())
+      .then(applySessionData)
+      .catch(() => {})
+      .finally(() => connectWs());
+  </script>
+</body>
+</html>
