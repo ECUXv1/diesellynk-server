@@ -751,44 +751,21 @@
 
   async function openGuacamole(guacUrl) {
     try {
+      // Server calls Guacamole and returns ONLY a short-lived token
+      // Credentials never touch the browser
       const resp = await fetch(`/api/guac-token?tech_auth_token=${encodeURIComponent(techAuthToken)}`);
       const data = await resp.json();
 
-      if (data.ok) {
+      if (data.ok && data.token) {
         const guacBase   = data.guac_url.replace(/\/$/, '');
         const clientPath = guacUrl.split('/#/')[1] || '';
-
-        // Open a new window and auto-submit the Guacamole login form
-        // This avoids CORS by submitting the form directly from the new window's origin
-        const html = `<!DOCTYPE html><html><body>
-          <form id="f" method="POST" action="${guacBase}/api/tokens">
-            <input name="username" value="${data.username}"/>
-            <input name="password" value="${data.password}"/>
-          </form>
-          <script>
-            fetch('${guacBase}/api/tokens', {
-              method:'POST',
-              headers:{'Content-Type':'application/x-www-form-urlencoded'},
-              body:'username=${encodeURIComponent(data.username)}&password=${encodeURIComponent(data.password)}'
-            }).then(r=>r.json()).then(d=>{
-              if(d.authToken) {
-                window.location.href='${guacBase}/#/${clientPath}&token='+d.authToken;
-              } else {
-                window.location.href='${guacBase}/#/${clientPath}';
-              }
-            }).catch(()=>{ window.location.href='${guacBase}/#/${clientPath}'; });
-          <\/script>
-        </body></html>`;
-
-        const blob = new Blob([html], {type:'text/html'});
-        const url  = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        // Open directly with server-issued token -- no credentials in browser
+        window.open(`${guacBase}/#/${clientPath}&token=${data.token}`, '_blank');
       } else {
-        showToast('RDP not configured on server');
-        window.open(guacUrl, '_blank');
+        showToast(data.message || 'RDP not ready yet');
       }
     } catch(e) {
-      window.open(guacUrl, '_blank');
+      showToast('Connection error - please try again');
     }
   }
 

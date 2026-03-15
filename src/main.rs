@@ -22,6 +22,22 @@ fn generate_session_id() -> String {
     format!("DL-{:X}", ts)
 }
 
+fn base64_decode(s: &str) -> Result<String, ()> {
+    let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    let mut bytes = Vec::new();
+    let chars: Vec<u8> = s.bytes().filter(|b| *b != b'=').collect();
+    for chunk in chars.chunks(4) {
+        let mut vals = [0u8; 4];
+        for (i, &c) in chunk.iter().enumerate() {
+            vals[i] = alphabet.iter().position(|&x| x == c).unwrap_or(0) as u8;
+        }
+        bytes.push((vals[0] << 2) | (vals[1] >> 4));
+        if chunk.len() > 2 { bytes.push((vals[1] << 4) | (vals[2] >> 2)); }
+        if chunk.len() > 3 { bytes.push((vals[2] << 6) | vals[3]); }
+    }
+    String::from_utf8(bytes).map_err(|_| ())
+}
+
 fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
@@ -966,11 +982,46 @@ async fn update_session(
         session.customer_ack = false;
         session.customer_message = String::new();
 
-        if payload.status == "Technician Disconnected" {
+        if payload.status == "Technician Disconnected" || payload.status == "Session Complete" {
             session.service_requested    = false;
             session.service_request_time = String::new();
             session.service_type         = String::new();
             session.connected_techs.clear();
+
+            // Delete Guacamole RDP connection so remote access is revoked
+            if !session.guac_url.is_empty() {
+                let guac_url_clone = session.guac_url.clone();
+                let guac_base = std::env::var("GUAC_URL").unwrap_or_default();
+                let guac_user = std::env::var("GUAC_USER").unwrap_or_else(|_| "guacadmin".to_string());
+                let guac_pass = std::env::var("GUAC_PASS").unwrap_or_default();
+
+                if !guac_base.is_empty() && !guac_pass.is_empty() {
+                    // Extract connection ID from guac_url
+                    // URL format: https://guac.../guacamole/#/client/BASE64
+                    // BASE64 decodes to: CONNECTION_ID\0c\0datasource
+                    if let Some(encoded) = guac_url_clone.split("/#/client/").nth(1) {
+                        // Pad base64 if needed
+                        let padded = format!("{}{}", encoded, "==".repeat((4 - encoded.len() % 4) % 4));
+                        if let Ok(decoded) = base64_decode(&padded) {
+                            if let Some(conn_id) = decoded.split('\0').next() {
+                                let token_url = format!("{}/api/tokens", guac_base.trim_end_matches('/'));
+                                let body = format!("username={}&password={}", guac_user, guac_pass);
+                                // Get token then delete connection
+                                let del_url = format!("{}/api/session/data/postgresql/connections/{}", guac_base.trim_end_matches('/'), conn_id);
+                                let conn_id_owned = conn_id.to_string();
+                                let _ = std::process::Command::new("sh")
+                                    .arg("-c")
+                                    .arg(format!(
+                                        "TOKEN=$(curl -s -X POST -H 'Content-Type: application/x-www-form-urlencoded' -d '{}' '{}' | grep -o '\"authToken\":\"[^\"]*\"' | cut -d'\"' -f4) && curl -s -X DELETE -H \"Guacamole-Token: $TOKEN\" '{}'",
+                                        body, token_url, del_url
+                                    ))
+                                    .spawn();
+                            }
+                        }
+                    }
+                }
+                session.guac_url = String::new();
+            }
         }
 
         push_event(session, "tech_command", format!("Tech: '{}' | {}", session.command, session.priority));
@@ -1459,7 +1510,8 @@ async fn admin_history(
     HttpResponse::Ok().json(history)
 }
 
-/// GET /api/guac-token -- returns Guacamole config to authenticated tech
+/// GET /api/guac-token -- calls Guacamole server-side, returns ONLY the token
+/// Credentials never leave the server
 #[get("/api/guac-token")]
 async fn guac_token(
     data: web::Data<AppState>,
@@ -1481,18 +1533,56 @@ async fn guac_token(
     let guac_user = std::env::var("GUAC_USER").unwrap_or_else(|_| "guacadmin".to_string());
     let guac_pass = std::env::var("GUAC_PASS").unwrap_or_default();
 
-    if guac_url.is_empty() {
+    if guac_url.is_empty() || guac_pass.is_empty() {
         return HttpResponse::Ok().json(serde_json::json!({
-            "ok": false, "message": "Guacamole not configured"
+            "ok": false, "message": "Guacamole not configured on server"
         }));
     }
 
-    HttpResponse::Ok().json(serde_json::json!({
-        "ok": true,
-        "guac_url": guac_url,
-        "username": guac_user,
-        "password": guac_pass,
-    }))
+    // Call Guacamole API server-side using curl -- credentials never touch the browser
+    let token_url = format!("{}/api/tokens", guac_url.trim_end_matches('/'));
+    let body      = format!("username={}&password={}", guac_user, guac_pass);
+
+    let output = std::process::Command::new("curl")
+        .args(&[
+            "-s", "-X", "POST",
+            "-H", "Content-Type: application/x-www-form-urlencoded",
+            "-d", &body,
+            &token_url,
+        ])
+        .output();
+
+    match output {
+        Ok(out) => {
+            let resp_str = String::from_utf8_lossy(&out.stdout);
+            match serde_json::from_str::<serde_json::Value>(&resp_str) {
+                Ok(json) => {
+                    let token = json.get("authToken")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if token.is_empty() {
+                        HttpResponse::Ok().json(serde_json::json!({
+                            "ok": false, "message": "Guacamole login failed"
+                        }))
+                    } else {
+                        // Return ONLY the token and base URL -- never credentials
+                        HttpResponse::Ok().json(serde_json::json!({
+                            "ok": true,
+                            "token": token,
+                            "guac_url": guac_url,
+                        }))
+                    }
+                },
+                Err(_) => HttpResponse::Ok().json(serde_json::json!({
+                    "ok": false, "message": "Invalid Guacamole response"
+                })),
+            }
+        },
+        Err(e) => HttpResponse::Ok().json(serde_json::json!({
+            "ok": false, "message": format!("Server error: {}", e)
+        })),
+    }
 }
 
 async fn ws_route(
