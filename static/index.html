@@ -498,19 +498,9 @@
         driverToken = data.driver_token;
         localStorage.setItem('dl_session_id',    sessionId);
         localStorage.setItem('dl_driver_token',  driverToken);
+        // Clear service requested state for new session
+        serviceRequested = false;
         document.getElementById('session-pill-label').textContent = sessionId;
-
-        // Tell the server to save session info for tunnel_reg.py
-        // tunnel_reg reads this via /api/session/:id to get the driver_token
-        // We also write it to a known endpoint so tunnel_reg can find the right session
-        try {
-          await fetch('/api/tablet-register/' + encodeURIComponent(sessionId), {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ driver_token: driverToken, ws_url: '' })
-          });
-        } catch(e) {}
-
       } catch(e) {
         document.getElementById('session-pill-label').textContent = 'Error';
       }
@@ -592,12 +582,15 @@
       // Fault codes
       renderFaultCodes(data.fault_codes || []);
 
-      // Service request state
-      if (data.service_requested) {
+      // Service request state — only update UI if driver tapped button this session
+      // or if tech disconnected and reset the button
+      if (data.service_requested && serviceRequested) {
         markServiceSent();
-      } else if (serviceRequested) {
+      } else if (!data.service_requested && serviceRequested) {
+        // Tech disconnected — reset the button so driver can request again
         resetServiceButton();
       }
+      // Never auto-show "Technician Requested" on page load — driver must tap the button
     }
 
     // ── TRUCK INFO ────────────────────────────────────────────
