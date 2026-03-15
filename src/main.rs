@@ -23,38 +23,21 @@ fn generate_session_id() -> String {
 }
 
 
-/// Pure Rust HTTPS POST -- no external dependencies needed
-/// Uses std::net::TcpStream with rustls for TLS
+/// Pure Rust HTTP POST using std::net::TcpStream only
 fn http_post(url: &str, body: &str) -> Result<String, String> {
-    // Parse URL
-    let url = url.trim_start_matches("https://").trim_start_matches("http://");
-    let (host_path, _) = url.split_once("/").map(|(h,p)| (h, p)).unwrap_or((url, ""));
-    let path = url.trim_start_matches(host_path);
-    let path = if path.is_empty() { "/" } else { path };
-    let host = host_path.split(":").next().unwrap_or(host_path);
-    let port_str = host_path.split(":").nth(1).unwrap_or("443");
-    let port: u16 = port_str.parse().unwrap_or(443);
-
     use std::io::{Read, Write};
 
+    let url_clean = url.trim_start_matches("https://").trim_start_matches("http://");
+    let slash_pos = url_clean.find('/').unwrap_or(url_clean.len());
+    let host_port = &url_clean[..slash_pos];
+    let path      = if slash_pos < url_clean.len() { &url_clean[slash_pos..] } else { "/" };
+    let host      = host_port.split(':').next().unwrap_or(host_port);
+    let port: u16 = host_port.split(':').nth(1).and_then(|p| p.parse().ok()).unwrap_or(80);
+
     let addr = format!("{}:{}", host, port);
-    let stream = std::net::TcpStream::connect(&addr)
+    let mut stream = std::net::TcpStream::connect(&addr)
         .map_err(|e| format!("Connect error: {}", e))?;
     stream.set_read_timeout(Some(std::time::Duration::from_secs(15))).ok();
-
-    // For HTTPS we need TLS -- use native TLS via rustls config
-    // Since we dont have rustls, use HTTP on port 80 for internal Railway communication
-    // Railway services can talk to each other over HTTP internally
-    let mut stream: Box<dyn Read + Write> = if port == 80 {
-        Box::new(stream)
-    } else {
-        // Try connecting to HTTP port 80 version of the URL for internal Railway networking
-        let http_addr = format!("{}:80", host);
-        match std::net::TcpStream::connect(&http_addr) {
-            Ok(s) => { s.set_read_timeout(Some(std::time::Duration::from_secs(15))).ok(); Box::new(s) }
-            Err(_) => Box::new(stream) // fallback to original
-        }
-    };
 
     let request = format!(
         "POST {} HTTP/1.0
@@ -68,29 +51,29 @@ Connection: close
     );
 
     stream.write_all(request.as_bytes()).map_err(|e| format!("Write error: {}", e))?;
-
     let mut response = String::new();
     stream.read_to_string(&mut response).map_err(|e| format!("Read error: {}", e))?;
 
-    // Extract body from HTTP response
-    if let Some(body_start) = response.find("
+    if let Some(pos) = response.find("
 
 ") {
-        Ok(response[body_start + 4..].to_string())
+        Ok(response[pos + 4..].to_string())
     } else {
         Ok(response)
     }
 }
 
 fn http_delete(url: &str, token: &str) -> Result<(), String> {
-    let url_clean = url.trim_start_matches("https://").trim_start_matches("http://");
-    let (host_path, _) = url_clean.split_once("/").map(|(h,p)| (h, p)).unwrap_or((url_clean, ""));
-    let path = url_clean.trim_start_matches(host_path);
-    let path = if path.is_empty() { "/" } else { path };
-    let host = host_path.split(":").next().unwrap_or(host_path);
-
     use std::io::Write;
-    let addr = format!("{}:80", host);
+
+    let url_clean = url.trim_start_matches("https://").trim_start_matches("http://");
+    let slash_pos = url_clean.find('/').unwrap_or(url_clean.len());
+    let host_port = &url_clean[..slash_pos];
+    let path      = if slash_pos < url_clean.len() { &url_clean[slash_pos..] } else { "/" };
+    let host      = host_port.split(':').next().unwrap_or(host_port);
+    let port: u16 = host_port.split(':').nth(1).and_then(|p| p.parse().ok()).unwrap_or(80);
+
+    let addr = format!("{}:{}", host, port);
     if let Ok(mut stream) = std::net::TcpStream::connect(&addr) {
         stream.set_read_timeout(Some(std::time::Duration::from_secs(10))).ok();
         let request = format!(
