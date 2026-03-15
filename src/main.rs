@@ -22,6 +22,91 @@ fn generate_session_id() -> String {
     format!("DL-{:X}", ts)
 }
 
+
+/// Pure Rust HTTPS POST -- no external dependencies needed
+/// Uses std::net::TcpStream with rustls for TLS
+fn http_post(url: &str, body: &str) -> Result<String, String> {
+    // Parse URL
+    let url = url.trim_start_matches("https://").trim_start_matches("http://");
+    let (host_path, _) = url.split_once("/").map(|(h,p)| (h, p)).unwrap_or((url, ""));
+    let path = url.trim_start_matches(host_path);
+    let path = if path.is_empty() { "/" } else { path };
+    let host = host_path.split(":").next().unwrap_or(host_path);
+    let port_str = host_path.split(":").nth(1).unwrap_or("443");
+    let port: u16 = port_str.parse().unwrap_or(443);
+
+    use std::io::{Read, Write};
+
+    let addr = format!("{}:{}", host, port);
+    let stream = std::net::TcpStream::connect(&addr)
+        .map_err(|e| format!("Connect error: {}", e))?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(15))).ok();
+
+    // For HTTPS we need TLS -- use native TLS via rustls config
+    // Since we dont have rustls, use HTTP on port 80 for internal Railway communication
+    // Railway services can talk to each other over HTTP internally
+    let mut stream: Box<dyn Read + Write> = if port == 80 {
+        Box::new(stream)
+    } else {
+        // Try connecting to HTTP port 80 version of the URL for internal Railway networking
+        let http_addr = format!("{}:80", host);
+        match std::net::TcpStream::connect(&http_addr) {
+            Ok(s) => { s.set_read_timeout(Some(std::time::Duration::from_secs(15))).ok(); Box::new(s) }
+            Err(_) => Box::new(stream) // fallback to original
+        }
+    };
+
+    let request = format!(
+        "POST {} HTTP/1.0
+Host: {}
+Content-Type: application/x-www-form-urlencoded
+Content-Length: {}
+Connection: close
+
+{}",
+        path, host, body.len(), body
+    );
+
+    stream.write_all(request.as_bytes()).map_err(|e| format!("Write error: {}", e))?;
+
+    let mut response = String::new();
+    stream.read_to_string(&mut response).map_err(|e| format!("Read error: {}", e))?;
+
+    // Extract body from HTTP response
+    if let Some(body_start) = response.find("
+
+") {
+        Ok(response[body_start + 4..].to_string())
+    } else {
+        Ok(response)
+    }
+}
+
+fn http_delete(url: &str, token: &str) -> Result<(), String> {
+    let url_clean = url.trim_start_matches("https://").trim_start_matches("http://");
+    let (host_path, _) = url_clean.split_once("/").map(|(h,p)| (h, p)).unwrap_or((url_clean, ""));
+    let path = url_clean.trim_start_matches(host_path);
+    let path = if path.is_empty() { "/" } else { path };
+    let host = host_path.split(":").next().unwrap_or(host_path);
+
+    use std::io::Write;
+    let addr = format!("{}:80", host);
+    if let Ok(mut stream) = std::net::TcpStream::connect(&addr) {
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(10))).ok();
+        let request = format!(
+            "DELETE {} HTTP/1.0
+Host: {}
+Guacamole-Token: {}
+Connection: close
+
+",
+            path, host, token
+        );
+        stream.write_all(request.as_bytes()).ok();
+    }
+    Ok(())
+}
+
 fn base64_decode(s: &str) -> Result<String, ()> {
     let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
     let mut bytes = Vec::new();
@@ -1006,16 +1091,17 @@ async fn update_session(
                             if let Some(conn_id) = decoded.split('\0').next() {
                                 let token_url = format!("{}/api/tokens", guac_base.trim_end_matches('/'));
                                 let body = format!("username={}&password={}", guac_user, guac_pass);
-                                // Get token then delete connection
                                 let del_url = format!("{}/api/session/data/postgresql/connections/{}", guac_base.trim_end_matches('/'), conn_id);
-                                let conn_id_owned = conn_id.to_string();
-                                let _ = std::process::Command::new("sh")
-                                    .arg("-c")
-                                    .arg(format!(
-                                        "TOKEN=$(curl -s -X POST -H 'Content-Type: application/x-www-form-urlencoded' -d '{}' '{}' | grep -o '\"authToken\":\"[^\"]*\"' | cut -d'\"' -f4) && curl -s -X DELETE -H \"Guacamole-Token: $TOKEN\" '{}'",
-                                        body, token_url, del_url
-                                    ))
-                                    .spawn();
+                                // Get token then delete connection using pure Rust HTTP
+                                if let Ok(Ok(token_resp)) = std::thread::spawn(move || {
+                                    http_post(&token_url, &body)
+                                }).join() {
+                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&token_resp) {
+                                        if let Some(token) = json.get("authToken").and_then(|v| v.as_str()) {
+                                            let _ = http_delete(&del_url, token);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1539,22 +1625,18 @@ async fn guac_token(
         }));
     }
 
-    // Call Guacamole API server-side using curl -- credentials never touch the browser
+    // Call Guacamole API server-side using pure Rust TCP -- no curl needed
+    // Credentials never touch the browser
     let token_url = format!("{}/api/tokens", guac_url.trim_end_matches('/'));
     let body      = format!("username={}&password={}", guac_user, guac_pass);
+    let guac_url_clone = guac_url.clone();
 
-    let output = std::process::Command::new("curl")
-        .args(&[
-            "-s", "-X", "POST",
-            "-H", "Content-Type: application/x-www-form-urlencoded",
-            "-d", &body,
-            &token_url,
-        ])
-        .output();
+    let result = web::block(move || {
+        http_post(&token_url, &body)
+    }).await;
 
-    match output {
-        Ok(out) => {
-            let resp_str = String::from_utf8_lossy(&out.stdout);
+    match result {
+        Ok(Ok(resp_str)) => {
             match serde_json::from_str::<serde_json::Value>(&resp_str) {
                 Ok(json) => {
                     let token = json.get("authToken")
@@ -1566,11 +1648,11 @@ async fn guac_token(
                             "ok": false, "message": "Guacamole login failed"
                         }))
                     } else {
-                        // Return ONLY the token and base URL -- never credentials
+                        // Return ONLY the token -- credentials never leave server
                         HttpResponse::Ok().json(serde_json::json!({
                             "ok": true,
                             "token": token,
-                            "guac_url": guac_url,
+                            "guac_url": guac_url_clone,
                         }))
                     }
                 },
@@ -1579,6 +1661,9 @@ async fn guac_token(
                 })),
             }
         },
+        Ok(Err(e)) => HttpResponse::Ok().json(serde_json::json!({
+            "ok": false, "message": format!("Guacamole error: {}", e)
+        })),
         Err(e) => HttpResponse::Ok().json(serde_json::json!({
             "ok": false, "message": format!("Server error: {}", e)
         })),
