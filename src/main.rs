@@ -1454,7 +1454,60 @@ async fn admin_history(
     HttpResponse::Ok().json(history)
 }
 
-/// WebSocket endpoint
+/// GET /api/guac-token — proxy Guacamole login server-side
+#[get("/api/guac-token")]
+async fn guac_token(
+    data: web::Data<AppState>,
+    query: web::Query<ActiveSessionsQuery>,
+) -> impl Responder {
+    let tech_sessions = data.tech_sessions.lock().unwrap();
+    let valid = query.tech_auth_token.as_deref()
+        .map(|t| validate_tech_token(&tech_sessions, t))
+        .unwrap_or(None);
+    drop(tech_sessions);
+
+    if valid.is_none() {
+        return HttpResponse::Unauthorized().json(ApiResponse {
+            ok: false, message: "Please log in first".to_string()
+        });
+    }
+
+    let guac_url  = std::env::var("GUAC_URL").unwrap_or_default();
+    let guac_user = std::env::var("GUAC_USER").unwrap_or_else(|_| "guacadmin".to_string());
+    let guac_pass = std::env::var("GUAC_PASS").unwrap_or_default();
+
+    if guac_url.is_empty() || guac_pass.is_empty() {
+        return HttpResponse::Ok().json(serde_json::json!({
+            "ok": false, "message": "Guacamole not configured on server"
+        }));
+    }
+
+    let token_url = format!("{}/api/tokens", guac_url.trim_end_matches('/'));
+    let body = format!("username={}&password={}", guac_user, urlencoding::encode(&guac_pass));
+
+    match ureq::post(&token_url)
+        .set("Content-Type", "application/x-www-form-urlencoded")
+        .send_string(&body)
+    {
+        Ok(resp) => {
+            match resp.into_json::<serde_json::Value>() {
+                Ok(json) => HttpResponse::Ok().json(serde_json::json!({
+                    "ok": true,
+                    "token": json.get("authToken").and_then(|v| v.as_str()).unwrap_or(""),
+                    "guac_url": guac_url,
+                })),
+                Err(_) => HttpResponse::Ok().json(serde_json::json!({
+                    "ok": false, "message": "Invalid Guacamole response"
+                })),
+            }
+        },
+        Err(e) => HttpResponse::Ok().json(serde_json::json!({
+            "ok": false, "message": format!("Cannot reach Guacamole: {}", e)
+        })),
+    }
+}
+
+
 async fn ws_route(
     req: HttpRequest,
     stream: web::Payload,
@@ -1580,6 +1633,8 @@ async fn main() -> std::io::Result<()> {
             .service(tablet_info)
             // WebSocket
             .route("/ws", web::get().to(ws_route))
+            // Guacamole token proxy
+            .service(guac_token)
             // Static files
             .service(Files::new("/", "./static").index_file("index.html"))
     })

@@ -812,19 +812,39 @@
   }
 
   // Auto-show Full Desktop button when Guacamole RDP is ready
-  function applyGuacUrl(guacUrl) {
+  async function applyGuacUrl(guacUrl) {
     if (!guacUrl) return;
     const btn    = document.getElementById('rdp-guac-btn');
     const status = document.getElementById('rdp-status');
     if (btn) {
       btn.style.display = 'inline-block';
-      btn.onclick = () => window.open(guacUrl, '_blank');
+      btn.onclick = () => openGuacamole(guacUrl);
     }
     if (status) {
       status.className   = 'rdp-status live';
       status.textContent = 'Full Desktop (RDP) Ready';
     }
-    showToast('Full Desktop RDP is ready -- click the blue button!');
+  }
+
+  async function openGuacamole(guacUrl) {
+    try {
+      // Get Guacamole token from our server (credentials stay server-side)
+      const resp = await fetch(`/api/guac-token?tech_auth_token=${encodeURIComponent(techAuthToken)}`);
+      const data = await resp.json();
+
+      if (data.ok && data.token) {
+        // Open Guacamole with auth token - no manual login needed
+        const clientPath = guacUrl.split('/#/')[1] || '';
+        const guacBase   = (data.guac_url || guacUrl.split('/#/')[0]).replace(/\/$/, '');
+        window.open(`${guacBase}/#/${clientPath}&token=${data.token}`, '_blank');
+      } else {
+        // Fallback - open directly
+        showToast('Opening Guacamole - you may need to log in');
+        window.open(guacUrl, '_blank');
+      }
+    } catch(e) {
+      window.open(guacUrl, '_blank');
+    }
   }
 
   // -- SEND COMMAND -------------------------------------------
