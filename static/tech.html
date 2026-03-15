@@ -373,26 +373,21 @@
     <div class="sec-label">Remote Desktop</div>
     <div class="remote-desktop-card">
       <div class="remote-desktop-bar">
-        <div class="remote-desktop-title"> Tablet Screen</div>
-        <span class="rdp-status offline" id="rdp-status">No Tablet Connected</span>
+        <div class="remote-desktop-title">Full Tablet Desktop</div>
+        <span class="rdp-status offline" id="rdp-status">Waiting for Tablet</span>
       </div>
-      <div class="remote-desktop-body">
-        <div class="rdp-placeholder" id="rdp-placeholder">
+      <div class="remote-desktop-body" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;padding:40px;">
+        <div id="rdp-placeholder">
           <div class="rdp-placeholder-icon"></div>
-          <div class="rdp-placeholder-text">Awaiting Tablet Connection</div>
-          <div class="rdp-placeholder-sub">Connect to a session to view the driver's tablet desktop</div>
+          <div class="rdp-placeholder-text">Full Desktop Access</div>
+          <div class="rdp-placeholder-sub">Full keyboard, clipboard, and all diagnostic software.<br>Button activates automatically when tablet connects.</div>
         </div>
-        <iframe id="rdp-iframe" src="about:blank" allowfullscreen></iframe>
-      </div>
-      <div class="rdp-controls">
-        <input type="text" class="rdp-url-input" id="rdp-url-input" placeholder="Tablet tunnel URL -- auto-filled when tablet connects"/>
-        <input type="password" class="rdp-url-input" id="vnc-password-input" placeholder="VNC Password" value="DL-Tablet-2025!" style="max-width:160px;"/>
-        <button class="rdp-ctrl-btn primary" onclick="connectRdp()"> VNC Connect</button>
-        <button class="rdp-ctrl-btn" id="rdp-guac-btn" style="display:none;background:linear-gradient(135deg,rgba(46,134,193,.2),rgba(46,134,193,.1));border-color:rgba(46,134,193,.5);color:#2E86C1;font-weight:700;" > Full Desktop (RDP)</button>
-        <button class="rdp-ctrl-btn danger" onclick="disconnectRdp()"> Disconnect</button>
-        <button class="rdp-ctrl-btn" onclick="document.getElementById('rdp-iframe').requestFullscreen()"> Fullscreen</button>
-        <button class="rdp-ctrl-btn" onclick="toggleRdpSize()"> Expand</button>
-        <span class="rdp-resize-hint"> Drag bottom edge to resize</span>
+        <button id="rdp-guac-btn" 
+          style="display:none;padding:16px 40px;font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:.2em;text-transform:uppercase;background:linear-gradient(135deg,rgba(46,134,193,.3),rgba(46,134,193,.15));border:1px solid rgba(46,134,193,.6);color:#5dade2;border-radius:8px;cursor:pointer;transition:all .3s;"
+          onmouseover="this.style.background='linear-gradient(135deg,rgba(46,134,193,.5),rgba(46,134,193,.3))'"
+          onmouseout="this.style.background='linear-gradient(135deg,rgba(46,134,193,.3),rgba(46,134,193,.15))'">
+          Connect Full Desktop (RDP)
+        </button>
       </div>
     </div>
   </div>
@@ -715,8 +710,7 @@
     renderTruckInfo(d.truck_info || null);
     renderGauges(d.live_data || null);
     renderFaultCodes(d.fault_codes || []);
-    if (d.tablet_ws_url) applyRdpUrl(d.tablet_ws_url);
-    if (d.guac_url)      applyGuacUrl(d.guac_url);
+    if (d.guac_url) applyGuacUrl(d.guac_url);
 
     // Service request alert
     if (d.service_requested && d.service_request_time) {
@@ -735,114 +729,57 @@
     lastAck = d.customer_ack; lastMsg = d.customer_message;
   }
 
-  function toggleRdpSize() {
-    const body = document.querySelector('.remote-desktop-body');
-    const btn  = event.target;
-    if (body.style.height === '95vh') {
-      body.style.height = '75vh';
-      btn.textContent = ' Expand';
-    } else {
-      body.style.height = '95vh';
-      btn.textContent = ' Shrink';
-    }
-  }
-
-  // -- REMOTE DESKTOP -----------------------------------------
-  function connectRdp() {
-    const urlInput = document.getElementById('rdp-url-input');
-    const url = urlInput.value.trim();
-    if (!url) { showToast('No tablet URL -- waiting for tablet to register'); return; }
-
-    const iframe    = document.getElementById('rdp-iframe');
-    const placeholder = document.getElementById('rdp-placeholder');
-    const status    = document.getElementById('rdp-status');
-
-    status.className   = 'rdp-status connecting';
-    status.textContent = 'Connecting...';
-
-    // Build websockify WebSocket URL from the tunnel URL
-    // Cloudflare tunnel exposes port 6080 (websockify) as wss://xxxx.trycloudflare.com
-    let wsUrl = url;
-    if (!wsUrl.startsWith('ws')) {
-      wsUrl = wsUrl.replace('https://', 'wss://').replace('http://', 'ws://');
-    }
-
-    // Get VNC password from input field
-    const vncPass = document.getElementById('vnc-password-input')?.value || 'DL-Tablet-2025!';
-
-    // Use noVNC inline viewer page served from our static files
-    const noVncUrl = `/novnc-viewer.html?ws=${encodeURIComponent(wsUrl)}&pass=${encodeURIComponent(vncPass)}`;
-
-    iframe.src = noVncUrl;
-    iframe.style.display = 'block';
-    placeholder.style.display = 'none';
-
-    iframe.onload = () => {
-      status.className   = 'rdp-status live';
-      status.textContent = ' Live';
-    };
-
-    showToast('Connecting to tablet desktop...');
-  }
-
-  function disconnectRdp() {
-    const iframe      = document.getElementById('rdp-iframe');
-    const placeholder = document.getElementById('rdp-placeholder');
-    const status      = document.getElementById('rdp-status');
-    iframe.src = 'about:blank';
-    iframe.style.display = 'none';
-    placeholder.style.display = 'block';
-    status.className   = 'rdp-status offline';
-    status.textContent = 'Disconnected';
-    showToast('Remote desktop disconnected');
-  }
-
-  // Auto-fill RDP URL when session data has a tablet_ws_url
-  function applyRdpUrl(wsUrl) {
-    if (!wsUrl) return;
-    const input  = document.getElementById('rdp-url-input');
-    const status = document.getElementById('rdp-status');
-    if (input) {
-      input.value = wsUrl;
-      if (status) {
-        status.className   = 'rdp-status connecting';
-        status.textContent = 'Tablet Online -- Click Connect';
-      }
-    }
-  }
-
-  // Auto-show Full Desktop button when Guacamole RDP is ready
-  async function applyGuacUrl(guacUrl) {
+  // -- REMOTE DESKTOP (Guacamole RDP only) --------------------
+  function applyGuacUrl(guacUrl) {
     if (!guacUrl) return;
     const btn    = document.getElementById('rdp-guac-btn');
     const status = document.getElementById('rdp-status');
+    const placeholder = document.getElementById('rdp-placeholder');
     if (btn) {
       btn.style.display = 'inline-block';
       btn.onclick = () => openGuacamole(guacUrl);
     }
     if (status) {
       status.className   = 'rdp-status live';
-      status.textContent = 'Full Desktop (RDP) Ready';
+      status.textContent = 'Full Desktop Ready';
     }
+    if (placeholder) {
+      placeholder.querySelector('.rdp-placeholder-sub').textContent = 'Click the button below to connect to the full tablet desktop.';
+    }
+    showToast('Full Desktop (RDP) is ready!');
   }
 
   async function openGuacamole(guacUrl) {
     try {
-      // Get Guacamole token from our server (credentials stay server-side)
+      // Get Guacamole credentials from server
       const resp = await fetch(`/api/guac-token?tech_auth_token=${encodeURIComponent(techAuthToken)}`);
       const data = await resp.json();
 
-      if (data.ok && data.token) {
-        // Open Guacamole with auth token - no manual login needed
+      if (data.ok) {
+        const guacBase   = data.guac_url.replace(/\/$/, '');
         const clientPath = guacUrl.split('/#/')[1] || '';
-        const guacBase   = (data.guac_url || guacUrl.split('/#/')[0]).replace(/\/$/, '');
-        window.open(`${guacBase}/#/${clientPath}&token=${data.token}`, '_blank');
+
+        // Login to Guacamole first to get token
+        const loginResp = await fetch(`${guacBase}/api/tokens`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: `username=${encodeURIComponent(data.username)}&password=${encodeURIComponent(data.password)}`
+        });
+
+        if (loginResp.ok) {
+          const loginData = await loginResp.json();
+          const token = loginData.authToken;
+          window.open(`${guacBase}/#/${clientPath}&token=${token}`, '_blank');
+        } else {
+          window.open(guacUrl, '_blank');
+        }
       } else {
-        // Fallback - open directly
-        showToast('Opening Guacamole - you may need to log in');
-        window.open(guacUrl, '_blank');
+        showToast('RDP not configured on server');
       }
     } catch(e) {
+      window.open(guacUrl, '_blank');
+    }
+  }
       window.open(guacUrl, '_blank');
     }
   }

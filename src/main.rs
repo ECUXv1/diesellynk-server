@@ -1454,7 +1454,7 @@ async fn admin_history(
     HttpResponse::Ok().json(history)
 }
 
-/// GET /api/guac-token -- proxy Guacamole login server-side
+/// GET /api/guac-token -- returns Guacamole config to authenticated tech
 #[get("/api/guac-token")]
 async fn guac_token(
     data: web::Data<AppState>,
@@ -1476,41 +1476,18 @@ async fn guac_token(
     let guac_user = std::env::var("GUAC_USER").unwrap_or_else(|_| "guacadmin".to_string());
     let guac_pass = std::env::var("GUAC_PASS").unwrap_or_default();
 
-    if guac_url.is_empty() || guac_pass.is_empty() {
+    if guac_url.is_empty() {
         return HttpResponse::Ok().json(serde_json::json!({
-            "ok": false, "message": "Guacamole not configured on server"
+            "ok": false, "message": "Guacamole not configured"
         }));
     }
 
-    let token_url = format!("{}/api/tokens", guac_url.trim_end_matches('/'));
-    let body      = format!("username={}&password={}", guac_user, urlencoding::encode(&guac_pass));
-    let guac_url_clone = guac_url.clone();
-
-    // Use web::block to run blocking ureq call without blocking async runtime
-    let result = web::block(move || {
-        ureq::post(&token_url)
-            .set("Content-Type", "application/x-www-form-urlencoded")
-            .send_string(&body)
-            .map_err(|e| e.to_string())
-            .and_then(|resp| {
-                resp.into_json::<serde_json::Value>()
-                    .map_err(|e| e.to_string())
-            })
-    }).await;
-
-    match result {
-        Ok(Ok(json)) => HttpResponse::Ok().json(serde_json::json!({
-            "ok": true,
-            "token": json.get("authToken").and_then(|v| v.as_str()).unwrap_or(""),
-            "guac_url": guac_url_clone,
-        })),
-        Ok(Err(e)) => HttpResponse::Ok().json(serde_json::json!({
-            "ok": false, "message": format!("Guacamole error: {}", e)
-        })),
-        Err(e) => HttpResponse::Ok().json(serde_json::json!({
-            "ok": false, "message": format!("Server error: {}", e)
-        })),
-    }
+    HttpResponse::Ok().json(serde_json::json!({
+        "ok": true,
+        "guac_url": guac_url,
+        "username": guac_user,
+        "password": guac_pass,
+    }))
 }
 
 async fn ws_route(
