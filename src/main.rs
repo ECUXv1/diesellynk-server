@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, Arc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-// ── HELPERS ───────────────────────────────────────────────────────────────────
+// -- HELPERS -------------------------------------------------------------------
 
 fn generate_token() -> String {
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
@@ -41,7 +41,7 @@ fn get_admin_credentials() -> (String, String) {
     )
 }
 
-// ── SQLITE DATABASE ───────────────────────────────────────────────────────────
+// -- SQLITE DATABASE -----------------------------------------------------------
 
 fn init_db(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch("
@@ -151,7 +151,7 @@ type Db = Arc<Mutex<Connection>>;
 fn open_db() -> Db {
     // Railway: set DATABASE_URL to a persistent volume path
     // Default: /app/diesellynk.db (works if Railway volume mounted)
-    // Fallback: /tmp/diesellynk.db (ephemeral — survives restarts but not redeploys)
+    // Fallback: /tmp/diesellynk.db (ephemeral -- survives restarts but not redeploys)
     let path = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
         // Try /app first, fall back to /tmp
         if std::path::Path::new("/app").exists() {
@@ -166,7 +166,7 @@ fn open_db() -> Db {
     Arc::new(Mutex::new(conn))
 }
 
-// ── DATA STRUCTURES ───────────────────────────────────────────────────────────
+// -- DATA STRUCTURES -----------------------------------------------------------
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct EventEntry {
@@ -250,7 +250,7 @@ struct AdminSession {
     created_at: u64,
 }
 
-// ── REQUEST/RESPONSE TYPES ────────────────────────────────────────────────────
+// -- REQUEST/RESPONSE TYPES ----------------------------------------------------
 
 #[derive(Debug, Deserialize)]
 struct CreateSessionRequest {
@@ -345,7 +345,7 @@ struct AdminRemoveOrgRequest     { org_id: String }
 #[derive(Debug, Deserialize)]
 struct AdminAuthQuery            { admin_token: Option<String> }
 
-// ── RATE LIMITING ─────────────────────────────────────────────────────────────
+// -- RATE LIMITING -------------------------------------------------------------
 
 struct RateLimiter {
     // in-memory: ip+endpoint -> (hits, window_start)
@@ -379,7 +379,7 @@ impl RateLimiter {
     }
 }
 
-// ── APP STATE ─────────────────────────────────────────────────────────────────
+// -- APP STATE -----------------------------------------------------------------
 
 struct AppState {
     db:             Db,
@@ -390,7 +390,7 @@ struct AppState {
     broadcaster:    Addr<WsBroadcaster>,
 }
 
-// ── SESSION DB HELPERS ────────────────────────────────────────────────────────
+// -- SESSION DB HELPERS --------------------------------------------------------
 
 fn save_session(db: &Db, s: &SessionState) {
     let conn = db.lock().unwrap();
@@ -537,7 +537,7 @@ fn load_orgs_from_db(db: &Db) -> HashMap<String, (String, String, bool)> {
     map
 }
 
-// ── SESSION HELPERS ───────────────────────────────────────────────────────────
+// -- SESSION HELPERS -----------------------------------------------------------
 
 fn default_session(session_id: String, org_id: String) -> SessionState {
     SessionState {
@@ -546,7 +546,7 @@ fn default_session(session_id: String, org_id: String) -> SessionState {
         driver_token:         generate_token(),
         tech_token:           generate_token(),
         status:               "Awaiting Technician".to_string(),
-        command:              "Session created — standby for tech connection".to_string(),
+        command:              "Session created -- standby for tech connection".to_string(),
         requires_ack:         false,
         customer_ack:         false,
         customer_message:     String::new(),
@@ -611,7 +611,7 @@ fn get_client_ip(req: &HttpRequest) -> String {
         .to_string()
 }
 
-// ── WEBSOCKET BROADCASTER ─────────────────────────────────────────────────────
+// -- WEBSOCKET BROADCASTER -----------------------------------------------------
 
 #[derive(Message)] #[rtype(result = "usize")]
 struct Connect { room: String, addr: Recipient<WsMessage> }
@@ -664,7 +664,7 @@ impl Handler<Broadcast> for WsBroadcaster {
     }
 }
 
-// ── WEBSOCKET SESSION ─────────────────────────────────────────────────────────
+// -- WEBSOCKET SESSION ---------------------------------------------------------
 
 struct WsSession {
     id: usize, room: String, hb: Instant,
@@ -723,7 +723,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsSession {
     }
 }
 
-// ── API ROUTES ────────────────────────────────────────────────────────────────
+// -- API ROUTES ----------------------------------------------------------------
 
 /// POST /api/tech-login
 #[post("/api/tech-login")]
@@ -736,7 +736,7 @@ async fn tech_login(
     // Rate limit: 10 attempts per minute per IP
     if !check_rate_limit(&data, &ip, "tech-login", 10, 60) {
         return HttpResponse::TooManyRequests().json(ApiResponse {
-            ok: false, message: "Too many login attempts — please wait".to_string()
+            ok: false, message: "Too many login attempts -- please wait".to_string()
         });
     }
 
@@ -835,7 +835,7 @@ async fn tech_join(
                 ts
             },
             None => return HttpResponse::Unauthorized().json(ApiResponse {
-                ok: false, message: "Invalid or expired token — please log in again".to_string()
+                ok: false, message: "Invalid or expired token -- please log in again".to_string()
             }),
         }
     };
@@ -854,7 +854,7 @@ async fn tech_join(
 
     if !can_access {
         return HttpResponse::Forbidden().json(ApiResponse {
-            ok: false, message: "Access denied — session belongs to a different organization".to_string()
+            ok: false, message: "Access denied -- session belongs to a different organization".to_string()
         });
     }
 
@@ -1050,10 +1050,10 @@ async fn service_request(
         session.service_request_time = now_string();
         session.service_type         = payload.service_type.clone();
         session.status  = "Service Requested".to_string();
-        session.command = "Connecting you to a technician — please stand by".to_string();
+        session.command = "Connecting you to a technician -- please stand by".to_string();
         session.priority = "action".to_string();
 
-        push_event(session, "service_request", format!("Driver requested service — type: {}", session.service_type));
+        push_event(session, "service_request", format!("Driver requested service -- type: {}", session.service_type));
         let json = serialize_session(session);
         save_session(&data.db, session);
         json
@@ -1219,7 +1219,7 @@ async fn tablet_register(
     HttpResponse::Ok().json(ApiResponse { ok: true, message: "Tablet registered".to_string() })
 }
 
-// ── ADMIN ROUTES ──────────────────────────────────────────────────────────────
+// -- ADMIN ROUTES --------------------------------------------------------------
 
 /// POST /api/admin/login
 #[post("/api/admin/login")]
@@ -1454,7 +1454,7 @@ async fn admin_history(
     HttpResponse::Ok().json(history)
 }
 
-/// GET /api/guac-token — proxy Guacamole login server-side
+/// GET /api/guac-token -- proxy Guacamole login server-side
 #[get("/api/guac-token")]
 async fn guac_token(
     data: web::Data<AppState>,
@@ -1483,30 +1483,35 @@ async fn guac_token(
     }
 
     let token_url = format!("{}/api/tokens", guac_url.trim_end_matches('/'));
-    let body = format!("username={}&password={}", guac_user, urlencoding::encode(&guac_pass));
+    let body      = format!("username={}&password={}", guac_user, urlencoding::encode(&guac_pass));
+    let guac_url_clone = guac_url.clone();
 
-    match ureq::post(&token_url)
-        .set("Content-Type", "application/x-www-form-urlencoded")
-        .send_string(&body)
-    {
-        Ok(resp) => {
-            match resp.into_json::<serde_json::Value>() {
-                Ok(json) => HttpResponse::Ok().json(serde_json::json!({
-                    "ok": true,
-                    "token": json.get("authToken").and_then(|v| v.as_str()).unwrap_or(""),
-                    "guac_url": guac_url,
-                })),
-                Err(_) => HttpResponse::Ok().json(serde_json::json!({
-                    "ok": false, "message": "Invalid Guacamole response"
-                })),
-            }
-        },
+    // Use web::block to run blocking ureq call without blocking async runtime
+    let result = web::block(move || {
+        ureq::post(&token_url)
+            .set("Content-Type", "application/x-www-form-urlencoded")
+            .send_string(&body)
+            .map_err(|e| e.to_string())
+            .and_then(|resp| {
+                resp.into_json::<serde_json::Value>()
+                    .map_err(|e| e.to_string())
+            })
+    }).await;
+
+    match result {
+        Ok(Ok(json)) => HttpResponse::Ok().json(serde_json::json!({
+            "ok": true,
+            "token": json.get("authToken").and_then(|v| v.as_str()).unwrap_or(""),
+            "guac_url": guac_url_clone,
+        })),
+        Ok(Err(e)) => HttpResponse::Ok().json(serde_json::json!({
+            "ok": false, "message": format!("Guacamole error: {}", e)
+        })),
         Err(e) => HttpResponse::Ok().json(serde_json::json!({
-            "ok": false, "message": format!("Cannot reach Guacamole: {}", e)
+            "ok": false, "message": format!("Server error: {}", e)
         })),
     }
 }
-
 
 async fn ws_route(
     req: HttpRequest,
@@ -1531,14 +1536,14 @@ async fn ws_route(
     ws::start(WsSession::new(session_id, data.broadcaster.clone(), initial_state), &req, stream)
 }
 
-// ── MAIN ──────────────────────────────────────────────────────────────────────
+// -- MAIN ----------------------------------------------------------------------
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    println!("╔═══════════════════════════════════════════╗");
-    println!("║     DieselLynk Server v0.4.0              ║");
-    println!("║     Phase 2 — Production Ready            ║");
-    println!("╚═══════════════════════════════════════════╝");
+    println!("");
+    println!("     DieselLynk Server v0.4.0              ");
+    println!("     Phase 2 -- Production Ready            ");
+    println!("");
 
     // Open database and load existing sessions back into memory
     let db = open_db();
@@ -1558,7 +1563,7 @@ async fn main() -> std::io::Result<()> {
         broadcaster,
     });
 
-    // Background cleanup task — runs every 5 minutes using actix_rt
+    // Background cleanup task -- runs every 5 minutes using actix_rt
     let db_bg    = db.clone();
     let state_bg = app_state.clone();
     actix_web::rt::spawn(async move {
