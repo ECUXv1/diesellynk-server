@@ -758,9 +758,10 @@
 
       if (data.ok && data.token) {
         const guacBase   = data.guac_url.replace(/\/$/, '');
-        const clientPath = guacUrl.split('/#/')[1] || '';
-        // Open directly with server-issued token -- no credentials in browser
-        window.open(`${guacBase}/#/${clientPath}&token=${data.token}`, '_blank');
+        const clientId   = guacUrl.split('/#/client/')[1] || '';
+        // Correct Guacamole URL format: token goes BEFORE the # as a query param
+        // Format: /guacamole/?token=TOKEN#/client/CONNECTIONID
+        window.open(`${guacBase}/?token=${data.token}#/client/${clientId}`, '_blank');
       } else {
         showToast(data.message || 'RDP not ready yet');
       }
