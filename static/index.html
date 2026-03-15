@@ -499,7 +499,18 @@
         localStorage.setItem('dl_session_id',    sessionId);
         localStorage.setItem('dl_driver_token',  driverToken);
         document.getElementById('session-pill-label').textContent = sessionId;
-        // connectWs called by initSession after this resolves
+
+        // Tell the server to save session info for tunnel_reg.py
+        // tunnel_reg reads this via /api/session/:id to get the driver_token
+        // We also write it to a known endpoint so tunnel_reg can find the right session
+        try {
+          await fetch('/api/tablet-register/' + encodeURIComponent(sessionId), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ driver_token: driverToken, ws_url: '' })
+          });
+        } catch(e) {}
+
       } catch(e) {
         document.getElementById('session-pill-label').textContent = 'Error';
       }

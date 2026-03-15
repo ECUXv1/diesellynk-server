@@ -1150,6 +1150,33 @@ async fn manual_truck_info(
     HttpResponse::Ok().json(ApiResponse { ok: true, message: "Truck info saved".to_string() })
 }
 
+/// GET /api/tablet-info/{org_id}
+/// Returns the most recently active session for an org so tunnel_reg can find it
+#[get("/api/tablet-info/{org_id}")]
+async fn tablet_info(
+    path: web::Path<String>,
+    data: web::Data<AppState>,
+) -> impl Responder {
+    let org_id   = path.into_inner();
+    let sessions = data.sessions.lock().unwrap();
+
+    // Find most recently active session for this org
+    let session = sessions.values()
+        .filter(|s| s.org_id == org_id)
+        .max_by_key(|s| s.last_activity);
+
+    match session {
+        Some(s) => HttpResponse::Ok().json(serde_json::json!({
+            "session_id":   s.session_id,
+            "driver_token": s.driver_token,
+            "org_id":       s.org_id,
+        })),
+        None => HttpResponse::NotFound().json(ApiResponse {
+            ok: false, message: "No active session for this org".to_string()
+        }),
+    }
+}
+
 /// POST /api/tablet-register/{session_id}
 #[post("/api/tablet-register/{session_id}")]
 async fn tablet_register(
@@ -1541,6 +1568,7 @@ async fn main() -> std::io::Result<()> {
             // Nexiq agent
             .service(nexiq_status)
             .service(tablet_register)
+            .service(tablet_info)
             // WebSocket
             .route("/ws", web::get().to(ws_route))
             // Static files
