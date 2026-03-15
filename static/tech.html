@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DieselLynk — Technician Panel</title>
+  <title>DieselLynk -- Technician Panel</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     :root{
@@ -69,7 +69,7 @@
     .sec-label{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--titanium);margin-bottom:14px;display:flex;align-items:center;gap:10px;}
     .sec-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--steel),transparent);}
 
-    /* ── ACTIVE SESSIONS DASHBOARD ───────────────────────────── */
+    /* -- ACTIVE SESSIONS DASHBOARD ----------------------------- */
     .sessions-dash{margin-bottom:28px;animation:cardUp .5s .05s cubic-bezier(.22,1,.36,1) both;}
     .sessions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
     .session-item{background:var(--carbon);border:1px solid var(--steel);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .2s,box-shadow .2s;position:relative;overflow:hidden;}
@@ -115,7 +115,7 @@
     .cmd-btn.fired{animation:goldFlash .45s ease;}
     @keyframes goldFlash{0%{box-shadow:0 0 0 0 rgba(212,175,55,.7)}50%{box-shadow:0 0 0 14px rgba(212,175,55,0)}100%{box-shadow:none}}
 
-    /* ── TRUCK DATA LIVE VIEW ─────────────────────────────────── */
+    /* -- TRUCK DATA LIVE VIEW ----------------------------------- */
     .live-view-wrap{margin-bottom:28px;}
     .live-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
     @media(max-width:640px){.live-cols{grid-template-columns:1fr;}}
@@ -166,7 +166,7 @@
     .rdp-status.offline{background:rgba(58,58,58,.3);color:var(--titanium);border:1px solid var(--steel);}
     .rdp-status.connecting{background:rgba(243,156,18,.1);color:var(--warn-orange);border:1px solid rgba(243,156,18,.3);animation:pulse 1s infinite;}
     .rdp-status.live{background:rgba(88,214,141,.1);color:var(--ack-yes);border:1px solid rgba(88,214,141,.3);}
-    /* Large resizable remote view — tech can drag to resize */
+    /* Large resizable remote view -- tech can drag to resize */
     .remote-desktop-body{
       position:relative;background:#000;
       height:75vh;min-height:600px;
@@ -259,7 +259,7 @@
         <span id="ws-label">Connecting</span>
       </div>
       <div class="auth-badge"><span class="auth-dot"></span>Authorized Access</div>
-      <div class="auth-badge" id="org-badge" style="background:rgba(88,214,141,.08);border-color:rgba(88,214,141,.22);color:#58D68D;">—</div>
+      <div class="auth-badge" id="org-badge" style="background:rgba(88,214,141,.08);border-color:rgba(88,214,141,.22);color:#58D68D;">--</div>
       <button onclick="logout()" style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:6px 14px;border:1px solid var(--steel);border-radius:20px;background:transparent;color:var(--titanium);cursor:pointer;">Logout</button>
     </div>
   </div>
@@ -275,10 +275,10 @@
     </div>
     <div class="session-id-display">
       <span style="color:var(--titanium);font-size:11px;font-weight:400;letter-spacing:.1em;">SESSION</span>
-      <span id="active-session-id">—</span>
+      <span id="active-session-id">--</span>
     </div>
     <div class="customer-link-row" id="customer-link-row">
-      Customer URL: <a id="customer-session-link" href="#" target="_blank">—</a>
+      Customer URL: <a id="customer-session-link" href="#" target="_blank">--</a>
     </div>
   </div>
 
@@ -287,7 +287,7 @@
     <div class="sub">The Intelligence Network</div>
   </div>
 
-  <!-- ── ACTIVE SESSIONS DASHBOARD ─────────────────────────── -->
+  <!-- -- ACTIVE SESSIONS DASHBOARD --------------------------- -->
   <div class="sessions-dash">
     <div class="sec-label">Service Queue</div>
     <div class="sessions-grid" id="sessions-grid">
@@ -298,32 +298,32 @@
   <div class="sec-label">Command Dispatch</div>
   <div class="cmd-grid">
     <button class="cmd-btn success" onclick="send('Technician Connected','Preparing Diagnostics...',false,'info',false,this)">
-      <span class="btn-icon">⚡</span><div class="btn-label">Start Session</div><div class="btn-sub">Initialize diagnostic link</div><span class="btn-badge badge-info">INFO</span>
+      <span class="btn-icon"></span><div class="btn-label">Start Session</div><div class="btn-sub">Initialize diagnostic link</div><span class="btn-badge badge-info">INFO</span>
     </button>
     <button class="cmd-btn p-warning" onclick="send('Technician Connected','Turn Ignition OFF',true,'warning',true,this)">
-      <span class="btn-icon">🔑</span><div class="btn-label">Ignition OFF</div><div class="btn-sub">Requires customer ack</div><span class="btn-badge badge-warn">WARNING · ACK</span>
+      <span class="btn-icon"></span><div class="btn-label">Ignition OFF</div><div class="btn-sub">Requires customer ack</div><span class="btn-badge badge-warn">WARNING  ACK</span>
     </button>
     <button class="cmd-btn p-action" onclick="send('Technician Connected','Turn Ignition ON',true,'action',true,this)">
-      <span class="btn-icon">🔑</span><div class="btn-label">Ignition ON</div><div class="btn-sub">Requires customer ack</div><span class="btn-badge badge-action">ACTION · ACK</span>
+      <span class="btn-icon"></span><div class="btn-label">Ignition ON</div><div class="btn-sub">Requires customer ack</div><span class="btn-badge badge-action">ACTION  ACK</span>
     </button>
     <button class="cmd-btn" onclick="send('Technician Connected','Reading Fault Codes',false,'info',false,this)">
-      <span class="btn-icon">🔍</span><div class="btn-label">Read Fault Codes</div><div class="btn-sub">Scan DTC register</div><span class="btn-badge badge-info">INFO</span>
+      <span class="btn-icon"></span><div class="btn-label">Read Fault Codes</div><div class="btn-sub">Scan DTC register</div><span class="btn-badge badge-info">INFO</span>
     </button>
     <button class="cmd-btn p-action" onclick="send('Technician Connected','Uploading Calibration',false,'action',false,this)">
-      <span class="btn-icon">📡</span><div class="btn-label">Upload Calibration</div><div class="btn-sub">Flash new tune data</div><span class="btn-badge badge-action">ACTION</span>
+      <span class="btn-icon"></span><div class="btn-label">Upload Calibration</div><div class="btn-sub">Flash new tune data</div><span class="btn-badge badge-action">ACTION</span>
     </button>
     <button class="cmd-btn p-critical" onclick="send('Technician Connected','Running Forced Regen',false,'critical',true,this)">
-      <span class="btn-icon">🔥</span><div class="btn-label">Forced Regen</div><div class="btn-sub">DPF regeneration cycle</div><span class="btn-badge badge-critical">CRITICAL · MODAL</span>
+      <span class="btn-icon"></span><div class="btn-label">Forced Regen</div><div class="btn-sub">DPF regeneration cycle</div><span class="btn-badge badge-critical">CRITICAL  MODAL</span>
     </button>
     <button class="cmd-btn success" onclick="send('Technician Connected','Session Complete',false,'info',false,this)">
-      <span class="btn-icon">✅</span><div class="btn-label">Complete Session</div><div class="btn-sub">Mark job done</div><span class="btn-badge badge-info">INFO</span>
+      <span class="btn-icon"></span><div class="btn-label">Complete Session</div><div class="btn-sub">Mark job done</div><span class="btn-badge badge-info">INFO</span>
     </button>
     <button class="cmd-btn danger" onclick="send('Technician Disconnected','Waiting for technician...',false,'info',false,this)">
-      <span class="btn-icon">⛔</span><div class="btn-label">Disconnect</div><div class="btn-sub">End remote session</div><span class="btn-badge badge-info">INFO</span>
+      <span class="btn-icon"></span><div class="btn-label">Disconnect</div><div class="btn-sub">End remote session</div><span class="btn-badge badge-info">INFO</span>
     </button>
   </div>
 
-  <!-- ── LIVE TRUCK DATA ─────────────────────────────────────── -->
+  <!-- -- LIVE TRUCK DATA --------------------------------------- -->
   <div class="live-view-wrap">
     <div class="sec-label">Live Truck Data</div>
     <div class="live-cols">
@@ -332,7 +332,7 @@
       <div>
         <div class="data-card" id="truck-card">
           <div class="data-card-hdr">
-            <span class="data-card-title">🚛 Vehicle ID</span>
+            <span class="data-card-title"> Vehicle ID</span>
             <span class="nexiq-status-pill disconnected" id="nexiq-pill">Adapter Offline</span>
           </div>
           <div class="truck-grid" id="truck-grid">
@@ -341,15 +341,15 @@
         </div>
         <div class="data-card" style="margin-top:12px;" id="gauges-card">
           <div class="data-card-hdr">
-            <span class="data-card-title">⚡ Engine Gauges</span>
+            <span class="data-card-title"> Engine Gauges</span>
           </div>
           <div class="gauge-grid" id="gauge-grid">
-            <div class="gauge-cell"><div class="gc-label">RPM</div><div class="gc-value">—</div><div class="gc-unit">RPM</div></div>
-            <div class="gauge-cell"><div class="gc-label">Speed</div><div class="gc-value">—</div><div class="gc-unit">MPH</div></div>
-            <div class="gauge-cell"><div class="gc-label">Coolant</div><div class="gc-value">—</div><div class="gc-unit">°C</div></div>
-            <div class="gauge-cell"><div class="gc-label">Oil Press</div><div class="gc-value">—</div><div class="gc-unit">kPa</div></div>
-            <div class="gauge-cell"><div class="gc-label">Boost</div><div class="gc-value">—</div><div class="gc-unit">kPa</div></div>
-            <div class="gauge-cell"><div class="gc-label">Battery</div><div class="gc-value">—</div><div class="gc-unit">V</div></div>
+            <div class="gauge-cell"><div class="gc-label">RPM</div><div class="gc-value">--</div><div class="gc-unit">RPM</div></div>
+            <div class="gauge-cell"><div class="gc-label">Speed</div><div class="gc-value">--</div><div class="gc-unit">MPH</div></div>
+            <div class="gauge-cell"><div class="gc-label">Coolant</div><div class="gc-value">--</div><div class="gc-unit">C</div></div>
+            <div class="gauge-cell"><div class="gc-label">Oil Press</div><div class="gc-value">--</div><div class="gc-unit">kPa</div></div>
+            <div class="gauge-cell"><div class="gc-label">Boost</div><div class="gc-value">--</div><div class="gc-unit">kPa</div></div>
+            <div class="gauge-cell"><div class="gc-label">Battery</div><div class="gc-value">--</div><div class="gc-unit">V</div></div>
           </div>
         </div>
       </div>
@@ -357,7 +357,7 @@
       <!-- Fault codes -->
       <div class="data-card" id="fault-card">
         <div class="data-card-hdr" style="justify-content:space-between;">
-          <span class="data-card-title">⚠ Fault Codes</span>
+          <span class="data-card-title"> Fault Codes</span>
           <span id="fault-count-badge" style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--danger);"></span>
         </div>
         <div class="fault-list" id="fault-list">
@@ -368,30 +368,31 @@
     </div>
   </div>
 
-  <!-- ── REMOTE DESKTOP ────────────────────────────────────── -->
+  <!-- -- REMOTE DESKTOP -------------------------------------- -->
   <div class="remote-desktop-wrap" id="rdp-wrap">
     <div class="sec-label">Remote Desktop</div>
     <div class="remote-desktop-card">
       <div class="remote-desktop-bar">
-        <div class="remote-desktop-title">🖥 Tablet Screen</div>
+        <div class="remote-desktop-title"> Tablet Screen</div>
         <span class="rdp-status offline" id="rdp-status">No Tablet Connected</span>
       </div>
       <div class="remote-desktop-body">
         <div class="rdp-placeholder" id="rdp-placeholder">
-          <div class="rdp-placeholder-icon">🖥</div>
+          <div class="rdp-placeholder-icon"></div>
           <div class="rdp-placeholder-text">Awaiting Tablet Connection</div>
           <div class="rdp-placeholder-sub">Connect to a session to view the driver's tablet desktop</div>
         </div>
         <iframe id="rdp-iframe" src="about:blank" allowfullscreen></iframe>
       </div>
       <div class="rdp-controls">
-        <input type="text" class="rdp-url-input" id="rdp-url-input" placeholder="Tablet tunnel URL — auto-filled when tablet connects"/>
+        <input type="text" class="rdp-url-input" id="rdp-url-input" placeholder="Tablet tunnel URL -- auto-filled when tablet connects"/>
         <input type="password" class="rdp-url-input" id="vnc-password-input" placeholder="VNC Password" value="DL-Tablet-2025!" style="max-width:160px;"/>
-        <button class="rdp-ctrl-btn primary" onclick="connectRdp()">⚡ Connect</button>
-        <button class="rdp-ctrl-btn danger" onclick="disconnectRdp()">⛔ Disconnect</button>
-        <button class="rdp-ctrl-btn" onclick="document.getElementById('rdp-iframe').requestFullscreen()">⛶ Fullscreen</button>
-        <button class="rdp-ctrl-btn" onclick="toggleRdpSize()">⤢ Expand</button>
-        <span class="rdp-resize-hint">↕ Drag bottom edge to resize</span>
+        <button class="rdp-ctrl-btn primary" onclick="connectRdp()"> VNC Connect</button>
+        <button class="rdp-ctrl-btn" id="rdp-guac-btn" style="display:none;background:linear-gradient(135deg,rgba(46,134,193,.2),rgba(46,134,193,.1));border-color:rgba(46,134,193,.5);color:#2E86C1;font-weight:700;" > Full Desktop (RDP)</button>
+        <button class="rdp-ctrl-btn danger" onclick="disconnectRdp()"> Disconnect</button>
+        <button class="rdp-ctrl-btn" onclick="document.getElementById('rdp-iframe').requestFullscreen()"> Fullscreen</button>
+        <button class="rdp-ctrl-btn" onclick="toggleRdpSize()"> Expand</button>
+        <span class="rdp-resize-hint"> Drag bottom edge to resize</span>
       </div>
     </div>
   </div>
@@ -404,22 +405,22 @@
       <div class="bar-dots"><div class="bar-dot bd-r"></div><div class="bar-dot bd-y"></div><div class="bar-dot bd-g"></div></div>
     </div>
     <div class="monitor-body">
-      <div class="m-field"><div class="m-label">Status</div><div class="m-value" id="live-status">—</div></div>
-      <div class="m-field cmd-f"><div class="m-label">Command</div><div class="m-value" id="live-command">—</div></div>
-      <div class="m-field ack-f"><div class="m-label">Requires Ack</div><div class="m-value" id="live-requires-ack">—</div></div>
-      <div class="m-field prio-f"><div class="m-label">Priority</div><div class="m-value" id="live-priority">—</div></div>
-      <div class="m-field modal-f"><div class="m-label">Show Modal</div><div class="m-value" id="live-show-modal">—</div></div>
+      <div class="m-field"><div class="m-label">Status</div><div class="m-value" id="live-status">--</div></div>
+      <div class="m-field cmd-f"><div class="m-label">Command</div><div class="m-value" id="live-command">--</div></div>
+      <div class="m-field ack-f"><div class="m-label">Requires Ack</div><div class="m-value" id="live-requires-ack">--</div></div>
+      <div class="m-field prio-f"><div class="m-label">Priority</div><div class="m-value" id="live-priority">--</div></div>
+      <div class="m-field modal-f"><div class="m-label">Show Modal</div><div class="m-value" id="live-show-modal">--</div></div>
     </div>
     <div class="monitor-body-2">
       <div class="m-field-wide" style="position:relative;">
         <div style="position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--ack-yes);border-radius:2px 0 0 2px;"></div>
         <div class="m-label" style="padding-left:6px;">Customer Ack</div>
-        <div class="m-value" id="live-customer-ack" style="padding-left:6px;">—</div>
+        <div class="m-value" id="live-customer-ack" style="padding-left:6px;">--</div>
       </div>
       <div class="m-field-wide" style="position:relative;">
         <div style="position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--gold);border-radius:2px 0 0 2px;"></div>
         <div class="m-label" style="padding-left:6px;">Customer Message</div>
-        <div class="m-value" id="live-customer-message" style="padding-left:6px;">—</div>
+        <div class="m-value" id="live-customer-message" style="padding-left:6px;">--</div>
       </div>
     </div>
   </div>
@@ -430,7 +431,7 @@
     <div class="log-box">
       <div class="log-hdr"><span class="log-pip"></span>Session Events</div>
       <div class="log-list" id="log-list">
-        <div class="log-empty">Awaiting first command…</div>
+        <div class="log-empty">Awaiting first command</div>
       </div>
     </div>
   </div>
@@ -447,7 +448,7 @@
 
   <div class="footer">
     <div class="footer-line"></div>
-    DieselLynk — The Intelligence Network
+    DieselLynk -- The Intelligence Network
     <div class="footer-line"></div>
   </div>
 </div>
@@ -455,7 +456,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  // ── AUTH CHECK ─────────────────────────────────────────────
+  // -- AUTH CHECK ---------------------------------------------
   const techAuthToken = localStorage.getItem('dl_tech_auth_token') || '';
   const techOrgId     = localStorage.getItem('dl_tech_org_id') || '';
   const isDieselLynk  = localStorage.getItem('dl_tech_is_dl') === '1';
@@ -477,9 +478,9 @@
   let ws = null, wsReconnectTimer = null;
   let lastStatus = '', lastCommand = '', lastAck = null, lastMsg = '';
 
-  // ── SESSION UI ─────────────────────────────────────────────
+  // -- SESSION UI ---------------------------------------------
   function updateSessionUI() {
-    document.getElementById('active-session-id').textContent = sessionId || '— None —';
+    document.getElementById('active-session-id').textContent = sessionId || '-- None --';
     const customerUrl = `${location.origin}/index.html?session=${encodeURIComponent(sessionId)}&org=${encodeURIComponent(techOrgId)}`;
     const linkEl = document.getElementById('customer-session-link');
     if (linkEl) { linkEl.textContent = customerUrl; linkEl.href = customerUrl; }
@@ -499,7 +500,7 @@
     if (url && url !== '#') window.open(url, '_blank');
   }
 
-  // ── ACTIVE SESSIONS DASHBOARD ──────────────────────────────
+  // -- ACTIVE SESSIONS DASHBOARD ------------------------------
   let dashTimer = null;
   async function refreshSessions() {
     try {
@@ -525,18 +526,18 @@
                   : s.nexiq_connected ? '<span class="si-status-badge active">Adapter Online</span>'
                   : '<span class="si-status-badge idle">Standby</span>';
       const truck = s.truck_info ? `${s.truck_info.year} ${s.truck_info.make} ${s.truck_info.model}` : 'No vehicle ID';
-      const faults = s.fault_code_count > 0 ? `<div class="si-faults">⚠ ${s.fault_code_count} fault code${s.fault_code_count > 1 ? 's' : ''}</div>` : '';
+      const faults = s.fault_code_count > 0 ? `<div class="si-faults"> ${s.fault_code_count} fault code${s.fault_code_count > 1 ? 's' : ''}</div>` : '';
       const connectBtn = isPending && !isActive
-        ? `<div style="margin-top:10px;"><button onclick="event.stopPropagation();switchSession('${s.session_id}')" style="width:100%;padding:8px;background:linear-gradient(135deg,rgba(243,156,18,.2),rgba(243,156,18,.1));border:1px solid var(--warn-orange);border-radius:6px;color:var(--warn-orange);font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:.12em;cursor:pointer;text-transform:uppercase;">⚡ Connect Now</button></div>`
+        ? `<div style="margin-top:10px;"><button onclick="event.stopPropagation();switchSession('${s.session_id}')" style="width:100%;padding:8px;background:linear-gradient(135deg,rgba(243,156,18,.2),rgba(243,156,18,.1));border:1px solid var(--warn-orange);border-radius:6px;color:var(--warn-orange);font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:.12em;cursor:pointer;text-transform:uppercase;"> Connect Now</button></div>`
         : isActive
-        ? `<div style="margin-top:8px;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--ack-yes);">● CONNECTED</div>`
+        ? `<div style="margin-top:8px;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--ack-yes);"> CONNECTED</div>`
         : '';
       return `
         <div class="session-item ${cls}" onclick="switchSession('${s.session_id}')">
           <div class="si-top"><span class="si-id">${s.session_id}</span>${badge}</div>
           <div class="si-truck">${truck}</div>
-          <div class="si-nexiq">${s.nexiq_connected ? '● ' + (s.adapter_name || 'Adapter Online') : '○ Adapter Offline'}</div>
-          ${s.connected_tech_count > 0 ? `<div style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--info-blue);margin-top:3px;">👥 ${s.connected_tech_count} tech${s.connected_tech_count > 1 ? 's' : ''} connected</div>` : ''}
+          <div class="si-nexiq">${s.nexiq_connected ? ' ' + (s.adapter_name || 'Adapter Online') : ' Adapter Offline'}</div>
+          ${s.connected_tech_count > 0 ? `<div style="font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--info-blue);margin-top:3px;"> ${s.connected_tech_count} tech${s.connected_tech_count > 1 ? 's' : ''} connected</div>` : ''}
           ${faults}
           ${connectBtn}
         </div>`;
@@ -551,7 +552,7 @@
         body: JSON.stringify({ tech_auth_token: techAuthToken })
       });
       if (res.status === 401) { logout(); return; }
-      if (res.status === 403) { showToast('Access denied — wrong organization'); return; }
+      if (res.status === 403) { showToast('Access denied -- wrong organization'); return; }
       const data = await res.json();
       if (data.tech_token) {
         sessionId = id;
@@ -572,9 +573,9 @@
               const status = document.getElementById('rdp-status');
               if (status) {
                 status.className   = 'rdp-status connecting';
-                status.textContent = 'Tablet Online — Click Connect';
+                status.textContent = 'Tablet Online -- Click Connect';
               }
-              showToast('Tablet URL ready — click Connect');
+              showToast('Tablet URL ready -- click Connect');
             }
           }
         }
@@ -583,13 +584,13 @@
         showToast('Connected to ' + id);
         await fetch(`/api/update/${encodeURIComponent(sessionId)}`, {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ tech_token: techToken, status:'Technician Connected', command:'Technician has joined — preparing diagnostics', requires_ack:false, priority:'info', show_modal:false })
+          body: JSON.stringify({ tech_token: techToken, status:'Technician Connected', command:'Technician has joined -- preparing diagnostics', requires_ack:false, priority:'info', show_modal:false })
         });
       }
     } catch(e) { showToast('Failed to connect to session'); }
   }
 
-  // ── HELPERS ────────────────────────────────────────────────
+  // -- HELPERS ------------------------------------------------
   function ts() { return new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
 
   function addLog(msg, cmd, rowClass='fresh') {
@@ -609,7 +610,7 @@
 
   function updatePriorityDisplay(priority) {
     const el = document.getElementById('live-priority'); if (!el) return;
-    el.textContent = (priority||'—').toUpperCase();
+    el.textContent = (priority||'--').toUpperCase();
     el.className = 'm-value prio-' + (priority||'info');
   }
   function updateModalDisplay(show_modal) {
@@ -618,28 +619,28 @@
     el.className = 'm-value ' + (show_modal ? 'modal-on' : 'modal-off');
   }
 
-  // ── TRUCK / LIVE / FAULT RENDER ────────────────────────────
+  // -- TRUCK / LIVE / FAULT RENDER ----------------------------
   function renderTruckInfo(t) {
     const grid = document.getElementById('truck-grid');
     if (!t) { grid.innerHTML = '<div class="truck-cell span2"><div class="tc-label">Status</div><div class="tc-value" style="color:var(--titanium);font-size:12px;">Awaiting vehicle ID</div></div>'; return; }
     grid.innerHTML = `
-      <div class="truck-cell span2"><div class="tc-label">VIN</div><div class="tc-value" style="font-size:11px;letter-spacing:.06em;">${t.vin||'—'}</div></div>
-      <div class="truck-cell"><div class="tc-label">Make / Model</div><div class="tc-value">${t.make||'—'} ${t.model||''}</div></div>
-      <div class="truck-cell"><div class="tc-label">Year</div><div class="tc-value">${t.year||'—'}</div></div>
-      <div class="truck-cell"><div class="tc-label">Engine</div><div class="tc-value">${t.engine||'—'}</div></div>
-      <div class="truck-cell"><div class="tc-label">Odometer</div><div class="tc-value">${t.odometer ? Number(t.odometer).toLocaleString()+' mi' : '—'}</div></div>`;
+      <div class="truck-cell span2"><div class="tc-label">VIN</div><div class="tc-value" style="font-size:11px;letter-spacing:.06em;">${t.vin||'--'}</div></div>
+      <div class="truck-cell"><div class="tc-label">Make / Model</div><div class="tc-value">${t.make||'--'} ${t.model||''}</div></div>
+      <div class="truck-cell"><div class="tc-label">Year</div><div class="tc-value">${t.year||'--'}</div></div>
+      <div class="truck-cell"><div class="tc-label">Engine</div><div class="tc-value">${t.engine||'--'}</div></div>
+      <div class="truck-cell"><div class="tc-label">Odometer</div><div class="tc-value">${t.odometer ? Number(t.odometer).toLocaleString()+' mi' : '--'}</div></div>`;
   }
 
   function renderGauges(d) {
     if (!d) return;
     const grid = document.getElementById('gauge-grid');
     const gauges = [
-      { label:'RPM',       val: d.engine_rpm     != null ? Math.round(d.engine_rpm).toLocaleString() : '—', unit:'RPM' },
-      { label:'Speed',     val: d.vehicle_speed  != null ? (d.vehicle_speed * 0.621371).toFixed(1) : '—', unit:'MPH' },
-      { label:'Coolant',   val: d.coolant_temp   != null ? d.coolant_temp.toFixed(0) : '—',               unit:'°C' },
-      { label:'Oil Press', val: d.oil_pressure   != null ? d.oil_pressure.toFixed(0) : '—',               unit:'kPa' },
-      { label:'Boost',     val: d.boost_pressure != null ? d.boost_pressure.toFixed(0) : '—',             unit:'kPa' },
-      { label:'Battery',   val: d.battery_voltage!= null ? d.battery_voltage.toFixed(1) : '—',            unit:'V' },
+      { label:'RPM',       val: d.engine_rpm     != null ? Math.round(d.engine_rpm).toLocaleString() : '--', unit:'RPM' },
+      { label:'Speed',     val: d.vehicle_speed  != null ? (d.vehicle_speed * 0.621371).toFixed(1) : '--', unit:'MPH' },
+      { label:'Coolant',   val: d.coolant_temp   != null ? d.coolant_temp.toFixed(0) : '--',               unit:'C' },
+      { label:'Oil Press', val: d.oil_pressure   != null ? d.oil_pressure.toFixed(0) : '--',               unit:'kPa' },
+      { label:'Boost',     val: d.boost_pressure != null ? d.boost_pressure.toFixed(0) : '--',             unit:'kPa' },
+      { label:'Battery',   val: d.battery_voltage!= null ? d.battery_voltage.toFixed(1) : '--',            unit:'V' },
     ];
     grid.innerHTML = gauges.map(g => `
       <div class="gauge-cell">
@@ -663,29 +664,29 @@
         <div class="fault-spn">SPN ${c.spn}<br><span style="font-size:8px;font-weight:400;">FMI ${c.fmi}</span></div>
         <div class="fault-info">
           <div class="fault-desc">${c.description||'Unknown'}</div>
-          <div class="fault-meta">${c.source||''} · Count: ${c.count||1}</div>
+          <div class="fault-meta">${c.source||''}  Count: ${c.count||1}</div>
         </div>
-        <div class="fault-badge ${c.active ? 'active' : 'stored'}">${c.active ? '● ACTIVE' : '○ STORED'}</div>
+        <div class="fault-badge ${c.active ? 'active' : 'stored'}">${c.active ? ' ACTIVE' : ' STORED'}</div>
       </div>`).join('');
   }
 
-  // ── EVENT LOG ──────────────────────────────────────────────
+  // -- EVENT LOG ----------------------------------------------
   function renderEventLog(events) {
     const el = document.getElementById('event-log');
     if (!events || events.length === 0) { el.innerHTML = '<div class="log-empty">No events yet.</div>'; return; }
     el.innerHTML = [...events].reverse().map(ev => {
       const cls = 'ev-' + (ev.kind || ev.priority || 'info');
-      return `<div class="log-row event-row"><span class="log-ts">${ev.timestamp||'—'}</span><span class="log-msg">${ev.message||''}</span><span class="log-cmd ${cls}">${(ev.kind||'info').toUpperCase()}</span></div>`;
+      return `<div class="log-row event-row"><span class="log-ts">${ev.timestamp||'--'}</span><span class="log-msg">${ev.message||''}</span><span class="log-cmd ${cls}">${(ev.kind||'info').toUpperCase()}</span></div>`;
     }).join('');
   }
 
-  // ── APPLY SESSION DATA ─────────────────────────────────────
+  // -- APPLY SESSION DATA -------------------------------------
   function applySessionData(d) {
     const changed    = d.status !== lastStatus || d.command !== lastCommand;
     const ackChanged = d.customer_ack !== lastAck || d.customer_message !== lastMsg;
 
-    document.getElementById('live-status').textContent   = d.status  || '—';
-    document.getElementById('live-command').textContent  = d.command || '—';
+    document.getElementById('live-status').textContent   = d.status  || '--';
+    document.getElementById('live-command').textContent  = d.command || '--';
     document.getElementById('live-requires-ack').textContent = d.requires_ack ? 'YES' : 'NO';
     updatePriorityDisplay(d.priority);
     updateModalDisplay(d.show_modal);
@@ -693,11 +694,11 @@
     const ackEl = document.getElementById('live-customer-ack');
     ackEl.textContent = d.customer_ack ? 'CONFIRMED' : 'PENDING';
     ackEl.className   = 'm-value ' + (d.customer_ack ? 'ack-yes' : 'ack-no');
-    document.getElementById('live-customer-message').textContent = d.customer_message || '—';
+    document.getElementById('live-customer-message').textContent = d.customer_message || '--';
 
     if (changed && lastStatus) { addLog(d.status, d.command); flashVal('live-status'); flashVal('live-command'); }
     if (ackChanged && lastAck !== null) {
-      addLog('Customer: ' + (d.customer_message||'(no message)'), d.customer_ack ? '✓ ACK' : '⚠ HELP', d.customer_ack ? 'ack-row' : 'help-row');
+      addLog('Customer: ' + (d.customer_message||'(no message)'), d.customer_ack ? ' ACK' : ' HELP', d.customer_ack ? 'ack-row' : 'help-row');
     }
     if (d.event_log) renderEventLog(d.event_log);
 
@@ -715,6 +716,7 @@
     renderGauges(d.live_data || null);
     renderFaultCodes(d.fault_codes || []);
     if (d.tablet_ws_url) applyRdpUrl(d.tablet_ws_url);
+    if (d.guac_url)      applyGuacUrl(d.guac_url);
 
     // Service request alert
     if (d.service_requested && d.service_request_time) {
@@ -723,7 +725,7 @@
         const alert = document.createElement('div');
         alert.id = 'srv-alert';
         alert.style.cssText = 'position:fixed;top:20px;right:20px;z-index:900;background:rgba(243,156,18,.12);border:1px solid var(--warn-orange);border-radius:10px;padding:14px 20px;font-family:Orbitron,sans-serif;font-size:9px;letter-spacing:.12em;color:var(--warn-orange);cursor:pointer;animation:alertPulse 2s ease-in-out infinite;max-width:260px;';
-        alert.innerHTML = `⚠ SERVICE REQUEST<br><span style="font-family:Rajdhani;font-size:12px;color:var(--text-primary);letter-spacing:.04em;">Driver has requested a technician.<br><span style="color:var(--titanium);">${sessionId}</span></span>`;
+        alert.innerHTML = ` SERVICE REQUEST<br><span style="font-family:Rajdhani;font-size:12px;color:var(--text-primary);letter-spacing:.04em;">Driver has requested a technician.<br><span style="color:var(--titanium);">${sessionId}</span></span>`;
         alert.onclick = () => alert.remove();
         document.body.appendChild(alert);
       }
@@ -738,18 +740,18 @@
     const btn  = event.target;
     if (body.style.height === '95vh') {
       body.style.height = '75vh';
-      btn.textContent = '⤢ Expand';
+      btn.textContent = ' Expand';
     } else {
       body.style.height = '95vh';
-      btn.textContent = '⤡ Shrink';
+      btn.textContent = ' Shrink';
     }
   }
 
-  // ── REMOTE DESKTOP ─────────────────────────────────────────
+  // -- REMOTE DESKTOP -----------------------------------------
   function connectRdp() {
     const urlInput = document.getElementById('rdp-url-input');
     const url = urlInput.value.trim();
-    if (!url) { showToast('No tablet URL — waiting for tablet to register'); return; }
+    if (!url) { showToast('No tablet URL -- waiting for tablet to register'); return; }
 
     const iframe    = document.getElementById('rdp-iframe');
     const placeholder = document.getElementById('rdp-placeholder');
@@ -777,7 +779,7 @@
 
     iframe.onload = () => {
       status.className   = 'rdp-status live';
-      status.textContent = '● Live';
+      status.textContent = ' Live';
     };
 
     showToast('Connecting to tablet desktop...');
@@ -804,12 +806,28 @@
       input.value = wsUrl;
       if (status) {
         status.className   = 'rdp-status connecting';
-        status.textContent = 'Tablet Online — Click Connect';
+        status.textContent = 'Tablet Online -- Click Connect';
       }
     }
   }
 
-  // ── SEND COMMAND ───────────────────────────────────────────
+  // Auto-show Full Desktop button when Guacamole RDP is ready
+  function applyGuacUrl(guacUrl) {
+    if (!guacUrl) return;
+    const btn    = document.getElementById('rdp-guac-btn');
+    const status = document.getElementById('rdp-status');
+    if (btn) {
+      btn.style.display = 'inline-block';
+      btn.onclick = () => window.open(guacUrl, '_blank');
+    }
+    if (status) {
+      status.className   = 'rdp-status live';
+      status.textContent = 'Full Desktop (RDP) Ready';
+    }
+    showToast('Full Desktop RDP is ready -- click the blue button!');
+  }
+
+  // -- SEND COMMAND -------------------------------------------
   async function send(status, command, requires_ack, priority, show_modal, btn) {
     if (!sessionId || !techToken) {
       showToast('Connect to a session first');
@@ -833,7 +851,7 @@
     lastStatus = status; lastCommand = command;
   }
 
-  // ── TOAST ──────────────────────────────────────────────────
+  // -- TOAST --------------------------------------------------
   let toastTimer = null;
   function showToast(msg) {
     const el = document.getElementById('toast');
@@ -843,7 +861,7 @@
     toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
   }
 
-  // ── WEBSOCKET ──────────────────────────────────────────────
+  // -- WEBSOCKET ----------------------------------------------
   function setWsStatus(state) {
     const dot   = document.getElementById('ws-dot');
     const label = document.getElementById('ws-label');
@@ -860,10 +878,10 @@
     ws.onerror   = () => { ws.close(); };
   }
 
-  // ── BOOT ──────────────────────────────────────────────────
+  // -- BOOT --------------------------------------------------
   // Show org badge
   const orgBadge = document.getElementById('org-badge');
-  if (orgBadge) orgBadge.textContent = isDieselLynk ? '⚡ DieselLynk Tech' : `Org: ${techOrgId}`;
+  if (orgBadge) orgBadge.textContent = isDieselLynk ? ' DieselLynk Tech' : `Org: ${techOrgId}`;
 
   // Only connect to a session if we have one in the URL
   if (sessionId) {
@@ -874,8 +892,8 @@
       .catch(()=>{})
       .finally(()=> { if (sessionId) connectWs(); });
   } else {
-    // No session yet — just show the queue, wait for tech to click Connect
-    document.getElementById('active-session-id').textContent = '— None —';
+    // No session yet -- just show the queue, wait for tech to click Connect
+    document.getElementById('active-session-id').textContent = '-- None --';
   }
 
   refreshSessions();

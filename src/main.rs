@@ -77,6 +77,7 @@ fn init_db(conn: &Connection) -> rusqlite::Result<()> {
             service_request_time  TEXT NOT NULL DEFAULT '',
             service_type          TEXT NOT NULL DEFAULT '',
             tablet_ws_url         TEXT NOT NULL DEFAULT '',
+            guac_url              TEXT NOT NULL DEFAULT '',
             event_log             TEXT NOT NULL DEFAULT '[]',
             connected_techs       TEXT NOT NULL DEFAULT '[]',
             created_at            INTEGER NOT NULL,
@@ -228,6 +229,7 @@ struct SessionState {
     service_request_time: String,
     service_type:         String,
     tablet_ws_url:        String,
+    guac_url:             String,   // Guacamole direct RDP connection URL
     event_log:            Vec<EventEntry>,
     connected_techs:      Vec<String>,  // list of tech org_ids currently connected
     last_activity:        u64,
@@ -404,8 +406,8 @@ fn save_session(db: &Db, s: &SessionState) {
           requires_ack, customer_ack, customer_message, priority, show_modal,
           nexiq_connected, adapter_name, fault_codes, truck_info, live_data,
           service_requested, service_request_time, service_type, tablet_ws_url,
-          event_log, connected_techs, created_at, last_activity)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)",
+          guac_url, event_log, connected_techs, created_at, last_activity)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25)",
         params![
             s.session_id, s.org_id, s.driver_token, s.tech_token,
             s.status, s.command,
@@ -414,7 +416,7 @@ fn save_session(db: &Db, s: &SessionState) {
             s.nexiq_connected as i32, s.adapter_name,
             fault_codes, truck_info, live_data,
             s.service_requested as i32, s.service_request_time,
-            s.service_type, s.tablet_ws_url,
+            s.service_type, s.tablet_ws_url, s.guac_url,
             event_log, conn_techs,
             now_secs() as i64, s.last_activity as i64,
         ],
@@ -430,7 +432,7 @@ fn load_sessions_from_db(db: &Db) -> HashMap<String, SessionState> {
                 requires_ack, customer_ack, customer_message, priority, show_modal,
                 nexiq_connected, adapter_name, fault_codes, truck_info, live_data,
                 service_requested, service_request_time, service_type, tablet_ws_url,
-                event_log, connected_techs, last_activity
+                guac_url, event_log, connected_techs, last_activity
          FROM sessions WHERE last_activity > ?1"
     ) {
         Ok(s) => s,
@@ -461,9 +463,10 @@ fn load_sessions_from_db(db: &Db) -> HashMap<String, SessionState> {
             row.get::<_, String>(17)?,  // service_request_time
             row.get::<_, String>(18)?,  // service_type
             row.get::<_, String>(19)?,  // tablet_ws_url
-            row.get::<_, String>(20)?,  // event_log
-            row.get::<_, String>(21)?,  // connected_techs
-            row.get::<_, i64>(22)?,     // last_activity
+            row.get::<_, String>(20)?,  // guac_url
+            row.get::<_, String>(21)?,  // event_log
+            row.get::<_, String>(22)?,  // connected_techs
+            row.get::<_, i64>(23)?,     // last_activity
         ))
     });
 
@@ -490,9 +493,10 @@ fn load_sessions_from_db(db: &Db) -> HashMap<String, SessionState> {
                 service_request_time: row.17,
                 service_type:         row.18,
                 tablet_ws_url:        row.19,
-                event_log:            serde_json::from_str(&row.20).unwrap_or_default(),
-                connected_techs:      serde_json::from_str(&row.21).unwrap_or_default(),
-                last_activity:        row.22 as u64,
+                guac_url:             row.20,
+                event_log:            serde_json::from_str(&row.21).unwrap_or_default(),
+                connected_techs:      serde_json::from_str(&row.22).unwrap_or_default(),
+                last_activity:        row.23 as u64,
             };
             map.insert(row.0, s);
         }
@@ -557,6 +561,7 @@ fn default_session(session_id: String, org_id: String) -> SessionState {
         service_request_time: String::new(),
         service_type:         String::new(),
         tablet_ws_url:        String::new(),
+        guac_url:             String::new(),
         event_log:            Vec::new(),
         connected_techs:      Vec::new(),
         last_activity:        now_secs(),
@@ -1187,6 +1192,7 @@ async fn tablet_register(
     let session_id    = path.into_inner();
     let driver_token  = payload.get("driver_token").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let ws_url        = payload.get("ws_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let guac_url      = payload.get("guac_url").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
     let json_to_broadcast = {
         let mut sessions = data.sessions.lock().unwrap();
@@ -1200,6 +1206,9 @@ async fn tablet_register(
         }
 
         session.tablet_ws_url = ws_url.clone();
+        if !guac_url.is_empty() {
+            session.guac_url = guac_url.clone();
+        }
         push_event(session, "tablet", format!("Tablet registered tunnel: {}", ws_url));
         let json = serialize_session(session);
         save_session(&data.db, session);
