@@ -106,6 +106,11 @@ fn init_db(conn: &Connection) -> rusqlite::Result<()> {
         );
     ")?;
 
+    // Migrations -- add new columns to existing databases safely
+    conn.execute_batch("
+        ALTER TABLE sessions ADD COLUMN guac_url TEXT NOT NULL DEFAULT '';
+    ").ok(); // ok() ignores error if column already exists
+
     // Seed default orgs if not exists
     let dl_exists: bool = conn.query_row(
         "SELECT COUNT(*) FROM orgs WHERE org_id = 'diesellynk'",
