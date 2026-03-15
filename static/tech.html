@@ -751,7 +751,6 @@
 
   async function openGuacamole(guacUrl) {
     try {
-      // Get Guacamole credentials from server
       const resp = await fetch(`/api/guac-token?tech_auth_token=${encodeURIComponent(techAuthToken)}`);
       const data = await resp.json();
 
@@ -759,22 +758,34 @@
         const guacBase   = data.guac_url.replace(/\/$/, '');
         const clientPath = guacUrl.split('/#/')[1] || '';
 
-        // Login to Guacamole first to get token
-        const loginResp = await fetch(`${guacBase}/api/tokens`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          body: `username=${encodeURIComponent(data.username)}&password=${encodeURIComponent(data.password)}`
-        });
+        // Open a new window and auto-submit the Guacamole login form
+        // This avoids CORS by submitting the form directly from the new window's origin
+        const html = `<!DOCTYPE html><html><body>
+          <form id="f" method="POST" action="${guacBase}/api/tokens">
+            <input name="username" value="${data.username}"/>
+            <input name="password" value="${data.password}"/>
+          </form>
+          <script>
+            fetch('${guacBase}/api/tokens', {
+              method:'POST',
+              headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:'username=${encodeURIComponent(data.username)}&password=${encodeURIComponent(data.password)}'
+            }).then(r=>r.json()).then(d=>{
+              if(d.authToken) {
+                window.location.href='${guacBase}/#/${clientPath}&token='+d.authToken;
+              } else {
+                window.location.href='${guacBase}/#/${clientPath}';
+              }
+            }).catch(()=>{ window.location.href='${guacBase}/#/${clientPath}'; });
+          <\/script>
+        </body></html>`;
 
-        if (loginResp.ok) {
-          const loginData = await loginResp.json();
-          const token = loginData.authToken;
-          window.open(`${guacBase}/#/${clientPath}&token=${token}`, '_blank');
-        } else {
-          window.open(guacUrl, '_blank');
-        }
+        const blob = new Blob([html], {type:'text/html'});
+        const url  = URL.createObjectURL(blob);
+        window.open(url, '_blank');
       } else {
         showToast('RDP not configured on server');
+        window.open(guacUrl, '_blank');
       }
     } catch(e) {
       window.open(guacUrl, '_blank');
