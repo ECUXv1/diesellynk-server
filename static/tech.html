@@ -386,6 +386,7 @@
       </div>
       <div class="rdp-controls">
         <input type="text" class="rdp-url-input" id="rdp-url-input" placeholder="Tablet tunnel URL — auto-filled when tablet connects"/>
+        <input type="password" class="rdp-url-input" id="vnc-password-input" placeholder="VNC Password" value="DL-Tablet-2025!" style="max-width:160px;"/>
         <button class="rdp-ctrl-btn primary" onclick="connectRdp()">⚡ Connect</button>
         <button class="rdp-ctrl-btn danger" onclick="disconnectRdp()">⛔ Disconnect</button>
         <button class="rdp-ctrl-btn" onclick="document.getElementById('rdp-iframe').requestFullscreen()">⛶ Fullscreen</button>
@@ -557,6 +558,27 @@
         techToken = data.tech_token;
         updateSessionUI();
         if (ws) { ws.onclose = null; ws.close(); }
+
+        // Fetch full session data immediately to get tablet_ws_url and all state
+        const sessRes = await fetch(`/api/session/${encodeURIComponent(id)}`);
+        if (sessRes.ok) {
+          const sessData = await sessRes.json();
+          applySessionData(sessData);
+          // Force apply tablet URL even if input already has a value
+          if (sessData.tablet_ws_url) {
+            const input = document.getElementById('rdp-url-input');
+            if (input) {
+              input.value = sessData.tablet_ws_url;
+              const status = document.getElementById('rdp-status');
+              if (status) {
+                status.className   = 'rdp-status connecting';
+                status.textContent = 'Tablet Online — Click Connect';
+              }
+              showToast('Tablet URL ready — click Connect');
+            }
+          }
+        }
+
         connectWs();
         showToast('Connected to ' + id);
         await fetch(`/api/update/${encodeURIComponent(sessionId)}`, {
@@ -743,8 +765,11 @@
       wsUrl = wsUrl.replace('https://', 'wss://').replace('http://', 'ws://');
     }
 
+    // Get VNC password from input field
+    const vncPass = document.getElementById('vnc-password-input')?.value || 'DL-Tablet-2025!';
+
     // Use noVNC inline viewer page served from our static files
-    const noVncUrl = `/novnc-viewer.html?ws=${encodeURIComponent(wsUrl)}`;
+    const noVncUrl = `/novnc-viewer.html?ws=${encodeURIComponent(wsUrl)}&pass=${encodeURIComponent(vncPass)}`;
 
     iframe.src = noVncUrl;
     iframe.style.display = 'block';
@@ -773,12 +798,14 @@
   // Auto-fill RDP URL when session data has a tablet_ws_url
   function applyRdpUrl(wsUrl) {
     if (!wsUrl) return;
-    const input = document.getElementById('rdp-url-input');
-    if (input && !input.value) {
+    const input  = document.getElementById('rdp-url-input');
+    const status = document.getElementById('rdp-status');
+    if (input) {
       input.value = wsUrl;
-      const status = document.getElementById('rdp-status');
-      status.className   = 'rdp-status connecting';
-      status.textContent = 'Tablet Online — Click Connect';
+      if (status) {
+        status.className   = 'rdp-status connecting';
+        status.textContent = 'Tablet Online — Click Connect';
+      }
     }
   }
 
