@@ -1,3 +1,4 @@
+use std::os::unix::process::ExitStatusExt;
 use actix::prelude::*;
 use actix_files::Files;
 use actix_web::{
@@ -76,7 +77,7 @@ Connection: close
                 Err(_) => break,
             }
         }
-        std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: resp, stderr: vec![] }
+        std::process::Output { status: std::os::unix::process::ExitStatusExt::from_raw(0), stdout: resp, stderr: vec![] }
     };
 
     let response = String::from_utf8_lossy(&output.stdout).to_string();
