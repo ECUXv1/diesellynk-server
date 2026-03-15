@@ -23,21 +23,16 @@ fn generate_session_id() -> String {
 }
 
 
-/// Pure Rust HTTP POST using std::net::TcpStream only
+/// HTTP/HTTPS POST using openssl s_client (available in Railway container)
 fn http_post(url: &str, body: &str) -> Result<String, String> {
-    use std::io::{Read, Write};
-
+    let is_https = url.starts_with("https://");
     let url_clean = url.trim_start_matches("https://").trim_start_matches("http://");
     let slash_pos = url_clean.find('/').unwrap_or(url_clean.len());
     let host_port = &url_clean[..slash_pos];
     let path      = if slash_pos < url_clean.len() { &url_clean[slash_pos..] } else { "/" };
     let host      = host_port.split(':').next().unwrap_or(host_port);
-    let port: u16 = host_port.split(':').nth(1).and_then(|p| p.parse().ok()).unwrap_or(80);
-
-    let addr = format!("{}:{}", host, port);
-    let mut stream = std::net::TcpStream::connect(&addr)
-        .map_err(|e| format!("Connect error: {}", e))?;
-    stream.set_read_timeout(Some(std::time::Duration::from_secs(15))).ok();
+    let port: u16 = host_port.split(':').nth(1).and_then(|p| p.parse().ok())
+        .unwrap_or(if is_https { 443 } else { 80 });
 
     let request = format!(
         "POST {} HTTP/1.0
@@ -50,16 +45,54 @@ Connection: close
         path, host, body.len(), body
     );
 
-    stream.write_all(request.as_bytes()).map_err(|e| format!("Write error: {}", e))?;
-    let mut response = String::new();
-    stream.read_to_string(&mut response).map_err(|e| format!("Read error: {}", e))?;
+    let output = if is_https {
+        // Use openssl s_client for HTTPS -- available in Railway container
+        use std::io::Write;
+        let mut child = std::process::Command::new("openssl")
+            .args(&["s_client", "-connect", &format!("{}:{}", host, port),
+                    "-quiet", "-no_ign_eof"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| format!("openssl error: {}", e))?;
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin.write_all(request.as_bytes()).ok();
+        }
+        child.wait_with_output().map_err(|e| format!("openssl output error: {}", e))?
+    } else {
+        use std::io::{Read, Write};
+        let addr = format!("{}:{}", host, port);
+        let mut stream = std::net::TcpStream::connect(&addr)
+            .map_err(|e| format!("Connect error: {}", e))?;
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(15))).ok();
+        stream.write_all(request.as_bytes()).map_err(|e| format!("Write error: {}", e))?;
+        let mut resp = Vec::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            match stream.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => resp.extend_from_slice(&buf[..n]),
+                Err(_) => break,
+            }
+        }
+        std::process::Output { status: std::process::ExitStatus::from_raw(0), stdout: resp, stderr: vec![] }
+    };
 
+    let response = String::from_utf8_lossy(&output.stdout).to_string();
     if let Some(pos) = response.find("
 
 ") {
         Ok(response[pos + 4..].to_string())
+    } else if response.contains("{") {
+        // Try to find JSON directly
+        if let Some(start) = response.find('{') {
+            Ok(response[start..].to_string())
+        } else {
+            Ok(response)
+        }
     } else {
-        Ok(response)
+        Err(format!("Unexpected response: {}", &response[..response.len().min(100)]))
     }
 }
 
