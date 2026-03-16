@@ -729,45 +729,35 @@
     lastAck = d.customer_ack; lastMsg = d.customer_message;
   }
 
-  // -- REMOTE DESKTOP (Guacamole RDP only) --------------------
-  function applyGuacUrl(guacUrl) {
-    if (!guacUrl) return;
-    const btn    = document.getElementById('rdp-guac-btn');
-    const status = document.getElementById('rdp-status');
+  // -- REMOTE DESKTOP (Cloudflare Browser RDP) ----------------
+  function applyGuacUrl(rdpUrl) {
+    // rdpUrl is now a Cloudflare Browser RDP URL:
+    // https://rdp.diesellynk.io/rdp/{vnet_id}/{tablet_ip}/3389
+    if (!rdpUrl) return;
+    const btn         = document.getElementById('rdp-guac-btn');
+    const status      = document.getElementById('rdp-status');
     const placeholder = document.getElementById('rdp-placeholder');
     if (btn) {
       btn.style.display = 'inline-block';
-      btn.onclick = () => openGuacamole(guacUrl);
+      btn.onclick = () => openRdp(rdpUrl);
     }
     if (status) {
       status.className   = 'rdp-status live';
       status.textContent = 'Full Desktop Ready';
     }
     if (placeholder) {
-      placeholder.querySelector('.rdp-placeholder-sub').textContent = 'Click the button below to connect to the full tablet desktop.';
+      placeholder.querySelector('.rdp-placeholder-sub').textContent = 'Click the button below to connect to the full tablet desktop via Cloudflare RDP.';
     }
     showToast('Full Desktop (RDP) is ready!');
   }
 
-  async function openGuacamole(guacUrl) {
-    try {
-      // Server calls Guacamole and returns ONLY a short-lived token
-      // Credentials never touch the browser
-      const resp = await fetch(`/api/guac-token?tech_auth_token=${encodeURIComponent(techAuthToken)}`);
-      const data = await resp.json();
-
-      if (data.ok && data.token) {
-        const guacBase   = data.guac_url.replace(/\/$/, '');
-        const clientId   = guacUrl.split('/#/client/')[1] || '';
-        // Correct Guacamole URL format: token goes BEFORE the # as a query param
-        // Format: /guacamole/?token=TOKEN#/client/CONNECTIONID
-        window.open(`${guacBase}/?token=${data.token}#/client/${clientId}`, '_blank');
-      } else {
-        showToast(data.message || 'RDP not ready yet');
-      }
-    } catch(e) {
-      showToast('Connection error - please try again');
+  function openRdp(rdpUrl) {
+    if (!rdpUrl) {
+      showToast('RDP not ready yet — waiting for driver to request service');
+      return;
     }
+    // Opens Cloudflare Browser RDP — tech authenticates via email OTP on first use
+    window.open(rdpUrl, '_blank');
   }
 
   // -- SEND COMMAND -------------------------------------------
