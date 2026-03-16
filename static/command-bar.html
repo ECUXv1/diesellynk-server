@@ -4,73 +4,164 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>DieselLynk — Command Bar</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet"/>
   <style>
-    :root{
-      --obsidian:#080808;--carbon:#111;--steel:#2E2E2E;--titanium:#7A7A7A;
-      --gold:#D4AF37;--gold-bright:#F0CE5E;--gold-dim:#9A7D20;
-      --text-primary:#F0EAD6;
-      --success:#27AE60;--danger:#C0392B;--ack-yes:#58D68D;--ack-no:#FF6B6B;
-      --info-blue:#5DADE2;--warn-orange:#F39C12;--crit-red:#E74C3C;
+    :root {
+      --bg:#0C0C0E; --surface:#161618; --surface2:#1E1E22;
+      --border:#2A2A30; --border2:#3A3A42;
+      --gold:#D4AF37; --gold2:#F0CE5E; --golddim:#7A6120;
+      --text:#F0EAD6; --muted:#6A6A78;
+      --green:#2ECC71; --green-bg:rgba(46,204,113,.12); --green-border:rgba(46,204,113,.3);
+      --orange:#F39C12; --orange-bg:rgba(243,156,18,.1); --orange-border:rgba(243,156,18,.3);
+      --blue:#5DADE2; --blue-bg:rgba(93,173,226,.1); --blue-border:rgba(93,173,226,.3);
+      --red:#E74C3C; --red-bg:rgba(231,76,60,.1); --red-border:rgba(231,76,60,.35);
+      --danger:#C0392B; --danger-bg:rgba(192,57,43,.1); --danger-border:rgba(192,57,43,.3);
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    html,body{width:100%;height:100vh;overflow:hidden;background:var(--obsidian);color:var(--text-primary);font-family:'Rajdhani',sans-serif;user-select:none;}
-    body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:999;background:linear-gradient(90deg,transparent,var(--gold-dim),var(--gold-bright),var(--gold),var(--gold-bright),var(--gold-dim),transparent);}
+    html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;user-select:none;}
 
-    .shell{display:grid;grid-template-columns:180px 1fr 160px;grid-template-rows:1fr auto;height:100vh;}
+    /* Gold top bar */
+    body::before{content:'';position:fixed;top:0;left:0;right:0;height:2px;z-index:99;background:linear-gradient(90deg,transparent,var(--golddim),var(--gold2),var(--gold),var(--gold2),var(--golddim),transparent);}
 
-    /* LEFT */
-    .left-panel{grid-row:1/3;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:14px 16px;border-right:1px solid var(--steel);background:rgba(0,0,0,.3);}
-    .lp-label{font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.2em;text-transform:uppercase;color:var(--titanium);}
-    .lp-sid{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .lp-ws{display:flex;align-items:center;gap:6px;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--titanium);}
-    .ws-dot{width:7px;height:7px;border-radius:50%;background:var(--steel);flex-shrink:0;transition:background .3s,box-shadow .3s;}
-    .ws-dot.connected{background:var(--ack-yes);box-shadow:0 0 7px var(--ack-yes);}
-    .ws-dot.reconnecting{background:var(--warn-orange);animation:blink .5s infinite;}
+    /* ── OUTER GRID ── */
+    .shell{
+      display:grid;
+      grid-template-columns: 200px 1fr 180px;
+      height:100vh;
+      padding-top:2px;
+    }
+
+    /* ── LEFT PANEL ── */
+    .left{
+      display:flex;flex-direction:column;justify-content:center;gap:14px;
+      padding:16px 18px;
+      border-right:1px solid var(--border);
+      background:var(--surface);
+    }
+    .left-top{display:flex;flex-direction:column;gap:4px;}
+    .l-label{font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);}
+    .l-sid{font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .l-ws{display:flex;align-items:center;gap:7px;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;color:var(--muted);}
+    .wsdot{width:8px;height:8px;border-radius:50%;background:var(--border2);flex-shrink:0;transition:background .3s,box-shadow .3s;}
+    .wsdot.connected{background:var(--green);box-shadow:0 0 8px var(--green);}
+    .wsdot.reconnecting{background:var(--orange);animation:blink .5s infinite;}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
-    .rdp-btn{display:none;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:14px 8px;border-radius:10px;cursor:pointer;background:linear-gradient(135deg,rgba(46,134,193,.25),rgba(46,134,193,.1));border:1px solid rgba(46,134,193,.5);transition:all .2s;}
-    .rdp-btn:hover{background:linear-gradient(135deg,rgba(46,134,193,.45),rgba(46,134,193,.2));box-shadow:0 0 20px rgba(93,173,226,.2);transform:translateY(-1px);}
-    .rdp-btn-icon{font-size:26px;}
-    .rdp-btn-label{font-family:'Orbitron',sans-serif;font-size:8px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--info-blue);text-align:center;}
 
-    /* CENTER BUTTONS */
-    .cmd-center{display:flex;align-items:stretch;padding:8px 10px 6px;gap:7px;}
-    .cb{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px 4px 7px;background:rgba(0,0,0,.5);border:1px solid var(--steel);border-radius:10px;cursor:pointer;overflow:hidden;transition:border-color .15s,transform .12s,box-shadow .15s;min-width:0;}
-    .cb::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--gold-dim),var(--gold-bright),var(--gold-dim));transform:scaleX(0);transform-origin:left;transition:transform .2s;}
-    .cb:hover::before{transform:scaleX(1);}
-    .cb:hover{transform:translateY(-2px);}
-    .cb:active{transform:scale(.95);}
-    .cb.fired{animation:flash .4s ease;}
-    @keyframes flash{0%{box-shadow:0 0 0 0 rgba(212,175,55,.9)}50%{box-shadow:0 0 0 14px rgba(212,175,55,0)}100%{box-shadow:none}}
-    .cb.success{border-color:rgba(39,174,96,.4);}.cb.success::before{background:linear-gradient(90deg,#1A5C3A,var(--success),#1A5C3A);}.cb.success:hover{border-color:var(--success);box-shadow:0 4px 18px rgba(39,174,96,.2);}
-    .cb.p-warning{border-color:rgba(243,156,18,.4);}.cb.p-warning::before{background:linear-gradient(90deg,#7A5000,var(--warn-orange),#7A5000);}.cb.p-warning:hover{border-color:var(--warn-orange);box-shadow:0 4px 18px rgba(243,156,18,.2);}
-    .cb.p-action{border-color:rgba(212,175,55,.4);}.cb.p-action::before{background:linear-gradient(90deg,var(--gold-dim),var(--gold-bright),var(--gold-dim));}.cb.p-action:hover{border-color:var(--gold);box-shadow:0 4px 18px rgba(212,175,55,.2);}
-    .cb.p-critical{border-color:rgba(231,76,60,.45);}.cb.p-critical::before{background:linear-gradient(90deg,#7B241C,var(--crit-red),#7B241C);}.cb.p-critical:hover{border-color:var(--crit-red);box-shadow:0 4px 18px rgba(231,76,60,.25);}
-    .cb.danger{border-color:rgba(192,57,43,.4);}.cb.danger::before{background:linear-gradient(90deg,#7B241C,var(--danger),#7B241C);}.cb.danger:hover{border-color:var(--danger);box-shadow:0 4px 18px rgba(192,57,43,.2);}
+    /* RDP button */
+    .rdp-btn{
+      display:none;
+      flex-direction:column;align-items:center;justify-content:center;gap:6px;
+      padding:14px 10px;border-radius:10px;cursor:pointer;border:1px solid var(--blue-border);
+      background:var(--blue-bg);transition:all .2s;
+    }
+    .rdp-btn:hover{background:rgba(93,173,226,.18);border-color:var(--blue);box-shadow:0 0 20px rgba(93,173,226,.15);transform:translateY(-1px);}
+    .rdp-btn:active{transform:scale(.97);}
+    .rdp-icon{font-size:28px;line-height:1;}
+    .rdp-label{font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);text-align:center;}
 
-    .cb-icon{font-size:clamp(22px,3vh,32px);line-height:1;}
-    .cb-label{font-family:'Orbitron',sans-serif;font-size:clamp(7px,1.1vh,11px);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-primary);text-align:center;line-height:1.3;white-space:nowrap;}
-    .cb-tag{font-family:'Orbitron',sans-serif;font-size:clamp(6px,.85vh,9px);letter-spacing:.08em;padding:2px 6px;border-radius:4px;border:1px solid currentColor;line-height:1;}
-    .cb-tag.warn{color:var(--warn-orange);}.cb-tag.action{color:var(--gold);}.cb-tag.critical{color:var(--crit-red);}
+    /* ── CENTER ── */
+    .center{
+      display:flex;flex-direction:column;
+      padding:10px 12px 8px;
+      gap:8px;
+      min-height:0;
+    }
 
-    /* STATUS STRIP */
-    .status-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;padding:0 10px 8px;}
-    .sf{background:rgba(0,0,0,.45);border:1px solid var(--steel);border-radius:6px;padding:5px 8px;display:flex;flex-direction:column;gap:2px;}
-    .sf.wide{grid-column:span 2;}
-    .sf-k{font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.14em;text-transform:uppercase;color:var(--titanium);}
-    .sf-v{font-family:'Orbitron',sans-serif;font-size:clamp(9px,1.2vh,13px);font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .sf-v.lit{animation:valueLit .4s ease;}
-    @keyframes valueLit{0%{color:var(--gold-bright)}100%{color:var(--text-primary)}}
+    /* Command buttons row */
+    .btns{
+      display:grid;
+      grid-template-columns:repeat(8,1fr);
+      gap:8px;
+      flex:1;
+      min-height:0;
+    }
 
-    /* RIGHT */
-    .right-panel{grid-row:1/3;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:14px;border-left:1px solid var(--steel);background:rgba(0,0,0,.3);}
-    .ack-badge{width:100%;font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:.1em;padding:9px 10px;border-radius:8px;text-align:center;transition:all .3s;}
-    .ack-badge.yes{background:rgba(88,214,141,.12);color:var(--ack-yes);border:1px solid rgba(88,214,141,.3);}
-    .ack-badge.no{background:rgba(255,107,107,.08);color:var(--ack-no);border:1px solid rgba(255,107,107,.25);}
-    .close-btn{width:100%;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:8px 10px;border:1px solid var(--steel);border-radius:6px;background:transparent;color:var(--titanium);cursor:pointer;transition:all .2s;}
+    .btn{
+      position:relative;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:5px;padding:0 6px;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:10px;
+      cursor:pointer;
+      overflow:hidden;
+      transition:border-color .15s,transform .1s,box-shadow .15s,background .15s;
+      min-width:0;min-height:0;
+    }
+    .btn::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0;opacity:0;transition:opacity .2s;}
+    .btn:hover::after{opacity:1;}
+    .btn:hover{transform:translateY(-2px);}
+    .btn:active{transform:scale(.96);}
+    .btn.fired{animation:fired .35s ease;}
+    @keyframes fired{0%{box-shadow:0 0 0 0 rgba(212,175,55,.9)}50%{box-shadow:0 0 0 14px rgba(212,175,55,0)}100%{box-shadow:none}}
+
+    /* Variant colors */
+    .btn-start{border-color:var(--green-border);background:var(--green-bg);}
+    .btn-start::after{background:var(--green);}
+    .btn-start:hover{border-color:var(--green);box-shadow:0 4px 20px rgba(46,204,113,.2);}
+
+    .btn-ignoff{border-color:var(--orange-border);}
+    .btn-ignoff::after{background:var(--orange);}
+    .btn-ignoff:hover{border-color:var(--orange);background:var(--orange-bg);box-shadow:0 4px 20px rgba(243,156,18,.2);}
+
+    .btn-ignon{border-color:rgba(212,175,55,.3);}
+    .btn-ignon::after{background:var(--gold);}
+    .btn-ignon:hover{border-color:var(--gold);background:rgba(212,175,55,.08);box-shadow:0 4px 20px rgba(212,175,55,.2);}
+
+    .btn-faults{border-color:rgba(93,173,226,.25);}
+    .btn-faults::after{background:var(--blue);}
+    .btn-faults:hover{border-color:var(--blue);background:var(--blue-bg);box-shadow:0 4px 20px rgba(93,173,226,.15);}
+
+    .btn-cal{border-color:rgba(212,175,55,.25);}
+    .btn-cal::after{background:var(--gold2);}
+    .btn-cal:hover{border-color:var(--gold2);background:rgba(240,206,94,.06);box-shadow:0 4px 20px rgba(212,175,55,.15);}
+
+    .btn-regen{border-color:var(--red-border);background:var(--red-bg);}
+    .btn-regen::after{background:var(--red);}
+    .btn-regen:hover{border-color:var(--red);box-shadow:0 4px 20px rgba(231,76,60,.25);}
+
+    .btn-complete{border-color:var(--green-border);}
+    .btn-complete::after{background:var(--green);}
+    .btn-complete:hover{border-color:var(--green);background:var(--green-bg);box-shadow:0 4px 20px rgba(46,204,113,.2);}
+
+    .btn-disc{border-color:var(--danger-border);}
+    .btn-disc::after{background:var(--danger);}
+    .btn-disc:hover{border-color:var(--danger);background:var(--danger-bg);box-shadow:0 4px 20px rgba(192,57,43,.2);}
+
+    .btn-icon{font-size:clamp(20px,2.4vh,28px);line-height:1;}
+    .btn-label{font-family:'Orbitron',sans-serif;font-size:clamp(7px,1vh,10px);font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text);text-align:center;line-height:1.3;}
+    .btn-tag{font-family:'Orbitron',sans-serif;font-size:clamp(6px,.8vh,8px);letter-spacing:.08em;padding:2px 5px;border-radius:4px;border:1px solid currentColor;line-height:1;}
+    .tag-warn{color:var(--orange);}
+    .tag-action{color:var(--gold);}
+    .tag-crit{color:var(--red);}
+
+    /* Status strip */
+    .strip{
+      display:grid;
+      grid-template-columns:1.2fr 2fr 0.8fr 0.8fr 0.8fr 1.5fr;
+      gap:6px;
+    }
+    .sf{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 9px;display:flex;flex-direction:column;gap:2px;min-width:0;}
+    .sf-k{font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);}
+    .sf-v{font-family:'Orbitron',sans-serif;font-size:clamp(9px,1.1vh,12px);font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .sf-v.flash{animation:flash-val .35s ease;}
+    @keyframes flash-val{0%{color:var(--gold2)}100%{color:var(--text)}}
+
+    /* ── RIGHT PANEL ── */
+    .right{
+      display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:10px;
+      padding:16px 16px;
+      border-left:1px solid var(--border);
+      background:var(--surface);
+    }
+    .r-label{font-family:'Orbitron',sans-serif;font-size:7px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);text-align:center;}
+    .ack{font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:.1em;padding:10px 8px;border-radius:8px;text-align:center;transition:all .3s;}
+    .ack.no{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);}
+    .ack.yes{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);}
+    .close-btn{font-family:'Orbitron',sans-serif;font-size:8px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:9px 8px;border:1px solid var(--border2);border-radius:7px;background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;text-align:center;}
     .close-btn:hover{border-color:var(--danger);color:var(--danger);}
 
-    .toast{position:fixed;bottom:10px;left:50%;transform:translateX(-50%) translateY(20px);z-index:9999;opacity:0;transition:opacity .25s,transform .25s;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.15em;text-transform:uppercase;background:rgba(20,20,20,.96);border:1px solid var(--gold-dim);border-radius:14px;padding:7px 18px;color:var(--gold);pointer-events:none;}
+    .toast{position:fixed;bottom:10px;left:50%;transform:translateX(-50%) translateY(16px);z-index:999;opacity:0;transition:opacity .25s,transform .25s;font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:.15em;text-transform:uppercase;background:rgba(12,12,14,.97);border:1px solid var(--golddim);border-radius:14px;padding:7px 18px;color:var(--gold);pointer-events:none;}
     .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   </style>
 </head>
@@ -78,154 +169,173 @@
 <div class="shell">
 
   <!-- LEFT -->
-  <div class="left-panel">
-    <div>
-      <div class="lp-label">Session</div>
-      <div class="lp-sid" id="bl-sid">--</div>
+  <div class="left">
+    <div class="left-top">
+      <div class="l-label">Session</div>
+      <div class="l-sid" id="bl-sid">--</div>
+      <div class="l-ws" style="margin-top:2px;">
+        <span class="wsdot" id="ws-dot"></span>
+        <span id="ws-label">Connecting</span>
+      </div>
     </div>
-    <div class="lp-ws"><span class="ws-dot" id="ws-dot"></span><span id="ws-label">Connecting</span></div>
-    <button id="rdp-launch-btn" class="rdp-btn" onclick="launchRdp()">
-      <span class="rdp-btn-icon">🖥️</span>
-      <span class="rdp-btn-label">Connect RDP</span>
+    <button id="rdp-btn" class="rdp-btn" onclick="launchRdp()">
+      <span class="rdp-icon">🖥️</span>
+      <span class="rdp-label">Connect RDP</span>
     </button>
   </div>
 
-  <!-- CENTER TOP — big buttons -->
-  <div class="cmd-center">
-    <button class="cb success" onclick="send('Technician Connected','Preparing Diagnostics...',false,'info',false,this)">
-      <span class="cb-icon">▶️</span><span class="cb-label">Start Session</span>
-    </button>
-    <button class="cb p-warning" onclick="send('Technician Connected','Turn Ignition OFF',true,'warning',true,this)">
-      <span class="cb-icon">🔴</span><span class="cb-label">Ignition OFF</span><span class="cb-tag warn">ACK</span>
-    </button>
-    <button class="cb p-action" onclick="send('Technician Connected','Turn Ignition ON',true,'action',true,this)">
-      <span class="cb-icon">🟢</span><span class="cb-label">Ignition ON</span><span class="cb-tag action">ACK</span>
-    </button>
-    <button class="cb" onclick="send('Technician Connected','Reading Fault Codes',false,'info',false,this)">
-      <span class="cb-icon">🔍</span><span class="cb-label">Read Faults</span>
-    </button>
-    <button class="cb p-action" onclick="send('Technician Connected','Uploading Calibration',false,'action',false,this)">
-      <span class="cb-icon">⬆️</span><span class="cb-label">Upload Cal</span>
-    </button>
-    <button class="cb p-critical" onclick="send('Technician Connected','Running Forced Regen',false,'critical',true,this)">
-      <span class="cb-icon">🔥</span><span class="cb-label">Forced Regen</span><span class="cb-tag critical">CRITICAL</span>
-    </button>
-    <button class="cb success" onclick="send('Technician Connected','Session Complete',false,'info',false,this)">
-      <span class="cb-icon">✅</span><span class="cb-label">Complete</span>
-    </button>
-    <button class="cb danger" onclick="send('Technician Disconnected','Waiting for technician...',false,'info',false,this)">
-      <span class="cb-icon">⏹️</span><span class="cb-label">Disconnect</span>
-    </button>
-  </div>
+  <!-- CENTER -->
+  <div class="center">
 
-  <!-- CENTER BOTTOM — status strip -->
-  <div class="status-strip">
-    <div class="sf"><div class="sf-k">Status</div><div class="sf-v" id="sf-status">--</div></div>
-    <div class="sf"><div class="sf-k">Command</div><div class="sf-v" id="sf-command">--</div></div>
-    <div class="sf"><div class="sf-k">Priority</div><div class="sf-v" id="sf-priority">--</div></div>
-    <div class="sf"><div class="sf-k">Ack Req</div><div class="sf-v" id="sf-ack-req">--</div></div>
-    <div class="sf"><div class="sf-k">Modal</div><div class="sf-v" id="sf-modal">--</div></div>
-    <div class="sf wide"><div class="sf-k">Customer Message</div><div class="sf-v" id="sf-msg">--</div></div>
+    <!-- Big buttons -->
+    <div class="btns">
+      <button class="btn btn-start" onclick="send('Technician Connected','Preparing Diagnostics...',false,'info',false,this)">
+        <span class="btn-icon">▶️</span>
+        <span class="btn-label">Start Session</span>
+      </button>
+      <button class="btn btn-ignoff" onclick="send('Technician Connected','Turn Ignition OFF',true,'warning',true,this)">
+        <span class="btn-icon">🔴</span>
+        <span class="btn-label">Ignition OFF</span>
+        <span class="btn-tag tag-warn">ACK</span>
+      </button>
+      <button class="btn btn-ignon" onclick="send('Technician Connected','Turn Ignition ON',true,'action',true,this)">
+        <span class="btn-icon">🟢</span>
+        <span class="btn-label">Ignition ON</span>
+        <span class="btn-tag tag-action">ACK</span>
+      </button>
+      <button class="btn btn-faults" onclick="send('Technician Connected','Reading Fault Codes',false,'info',false,this)">
+        <span class="btn-icon">🔍</span>
+        <span class="btn-label">Read Faults</span>
+      </button>
+      <button class="btn btn-cal" onclick="send('Technician Connected','Uploading Calibration',false,'action',false,this)">
+        <span class="btn-icon">⬆️</span>
+        <span class="btn-label">Upload Cal</span>
+      </button>
+      <button class="btn btn-regen" onclick="send('Technician Connected','Running Forced Regen',false,'critical',true,this)">
+        <span class="btn-icon">🔥</span>
+        <span class="btn-label">Forced Regen</span>
+        <span class="btn-tag tag-crit">CRITICAL</span>
+      </button>
+      <button class="btn btn-complete" onclick="send('Technician Connected','Session Complete',false,'info',false,this)">
+        <span class="btn-icon">✅</span>
+        <span class="btn-label">Complete</span>
+      </button>
+      <button class="btn btn-disc" onclick="send('Technician Disconnected','Waiting for technician...',false,'info',false,this)">
+        <span class="btn-icon">⏹️</span>
+        <span class="btn-label">Disconnect</span>
+      </button>
+    </div>
+
+    <!-- Status strip -->
+    <div class="strip">
+      <div class="sf"><div class="sf-k">Status</div><div class="sf-v" id="sf-status">--</div></div>
+      <div class="sf"><div class="sf-k">Command</div><div class="sf-v" id="sf-command">--</div></div>
+      <div class="sf"><div class="sf-k">Priority</div><div class="sf-v" id="sf-priority">--</div></div>
+      <div class="sf"><div class="sf-k">Ack Req</div><div class="sf-v" id="sf-ack-req">--</div></div>
+      <div class="sf"><div class="sf-k">Modal</div><div class="sf-v" id="sf-modal">--</div></div>
+      <div class="sf"><div class="sf-k">Customer Message</div><div class="sf-v" id="sf-msg">--</div></div>
+    </div>
+
   </div>
 
   <!-- RIGHT -->
-  <div class="right-panel">
-    <div class="lp-label">Customer Ack</div>
-    <div class="ack-badge no" id="ack-badge">PENDING</div>
-    <button class="close-btn" onclick="window.close()">✕ Close</button>
+  <div class="right">
+    <div class="r-label">Customer Ack</div>
+    <div class="ack no" id="ack-badge">PENDING</div>
+    <button class="close-btn" onclick="window.close()">✕ Close Bar</button>
   </div>
 
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
-  const params        = new URLSearchParams(location.search);
-  const sessionId     = params.get('session') || '';
-  const techAuthToken = params.get('auth')    || '';
-  const techOrgId     = params.get('org')     || '';
-  const rdpUrl        = params.get('rdp')     || '';
+  const p = new URLSearchParams(location.search);
+  const sessionId     = p.get('session') || '';
+  const techAuthToken = p.get('auth')    || '';
+  const rdpUrl        = p.get('rdp')     || '';
 
   document.getElementById('bl-sid').textContent = sessionId || '--';
-  if (rdpUrl) document.getElementById('rdp-launch-btn').style.display = 'flex';
+  if (rdpUrl) document.getElementById('rdp-btn').style.display = 'flex';
 
   if (!sessionId || !techAuthToken) {
-    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Orbitron,sans-serif;font-size:13px;color:#8A8A8A;letter-spacing:.2em;">OPEN FROM TECH PANEL</div>';
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Orbitron,sans-serif;font-size:13px;color:#6A6A78;letter-spacing:.2em;">OPEN FROM TECH PANEL</div>';
   }
 
-  let techToken = '', ws = null, wsReconnectTimer = null, _rdpWin = null;
+  let techToken = '', ws = null, wsRecon = null, rdpWin = null;
 
   function launchRdp() {
     if (!rdpUrl) { showToast('RDP URL not ready'); return; }
-    const sw = window.screen.width, sh = window.screen.height;
+    const sw = window.screen.availWidth, sh = window.screen.availHeight;
     const sl = window.screen.availLeft || 0, st = window.screen.availTop || 0;
-    const rdpH = Math.round(sh * 0.78);
-    if (!_rdpWin || _rdpWin.closed) {
-      _rdpWin = window.open(rdpUrl, 'dl_rdp_window',
-        `width=${sw},height=${rdpH},left=${sl},top=${st},toolbar=no,menubar=no,scrollbars=no,resizable=yes`);
-    } else { _rdpWin.focus(); }
+    if (!rdpWin || rdpWin.closed) {
+      rdpWin = window.open(rdpUrl, 'dl_rdp',
+        `width=${sw},height=${Math.round(sh*.78)},left=${sl},top=${st},toolbar=no,menubar=no,scrollbars=no,resizable=yes`);
+    } else rdpWin.focus();
   }
 
-  function setWs(state) {
-    const dot = document.getElementById('ws-dot'), label = document.getElementById('ws-label');
-    if (dot)   dot.className = 'ws-dot ' + state;
-    if (label) label.textContent = state === 'connected' ? 'Live' : state === 'reconnecting' ? 'Reconnecting' : 'Offline';
+  function setWs(s) {
+    const d = document.getElementById('ws-dot'), l = document.getElementById('ws-label');
+    if (d) d.className = 'wsdot ' + s;
+    if (l) l.textContent = s === 'connected' ? 'Live' : s === 'reconnecting' ? 'Reconnecting' : 'Offline';
   }
 
   function connectWs() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}/ws?session=${encodeURIComponent(sessionId)}`);
-    ws.onopen    = () => { setWs('connected'); if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; } };
-    ws.onmessage = (evt) => { try { applyData(JSON.parse(evt.data)); } catch(e) {} };
-    ws.onclose   = () => { setWs('reconnecting'); wsReconnectTimer = setTimeout(connectWs, 2000); };
-    ws.onerror   = () => { ws.close(); };
+    ws.onopen    = () => { setWs('connected'); if (wsRecon) { clearTimeout(wsRecon); wsRecon = null; } };
+    ws.onmessage = e => { try { applyData(JSON.parse(e.data)); } catch(_){} };
+    ws.onclose   = () => { setWs('reconnecting'); wsRecon = setTimeout(connectWs, 2000); };
+    ws.onerror   = () => ws.close();
   }
 
   async function joinSession() {
     try {
-      const res  = await fetch(`/api/tech-join/${encodeURIComponent(sessionId)}`, {
+      const r = await fetch(`/api/tech-join/${encodeURIComponent(sessionId)}`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ tech_auth_token: techAuthToken })
       });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.tech_token) { techToken = data.tech_token; connectWs(); }
-    } catch(e) {}
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.tech_token) { techToken = d.tech_token; connectWs(); }
+    } catch(_) {}
   }
 
   function applyData(d) {
-    const setText = (id, val) => {
+    const set = (id, val) => {
       const el = document.getElementById(id); if (!el) return;
-      if (el.textContent !== val) { el.textContent = val; el.classList.remove('lit'); void el.offsetWidth; el.classList.add('lit'); }
+      if (el.textContent !== val) {
+        el.textContent = val;
+        el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+      }
     };
-    setText('sf-status',   d.status   || '--');
-    setText('sf-command',  d.command  || '--');
-    setText('sf-priority', (d.priority || '--').toUpperCase());
-    setText('sf-ack-req',  d.requires_ack ? 'YES' : 'NO');
-    setText('sf-modal',    d.show_modal   ? 'ACTIVE' : 'OFF');
-    setText('sf-msg',      d.customer_message || '--');
+    set('sf-status',   d.status   || '--');
+    set('sf-command',  d.command  || '--');
+    set('sf-priority', (d.priority || '--').toUpperCase());
+    set('sf-ack-req',  d.requires_ack ? 'YES' : 'NO');
+    set('sf-modal',    d.show_modal   ? 'ACTIVE' : 'OFF');
+    set('sf-msg',      d.customer_message || '--');
     const ack = document.getElementById('ack-badge');
-    if (ack) { ack.textContent = d.customer_ack ? 'CONFIRMED' : 'PENDING'; ack.className = 'ack-badge ' + (d.customer_ack ? 'yes' : 'no'); }
+    if (ack) { ack.textContent = d.customer_ack ? 'CONFIRMED' : 'PENDING'; ack.className = 'ack ' + (d.customer_ack ? 'yes' : 'no'); }
   }
 
   async function send(status, command, requires_ack, priority, show_modal, btn) {
-    if (!sessionId || !techToken) { showToast('Not connected to session'); return; }
-    btn.classList.add('fired');
-    setTimeout(() => btn.classList.remove('fired'), 500);
+    if (!sessionId || !techToken) { showToast('Not connected'); return; }
+    btn.classList.add('fired'); setTimeout(() => btn.classList.remove('fired'), 400);
     try {
       await fetch(`/api/update/${encodeURIComponent(sessionId)}`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ tech_token: techToken, status, command, requires_ack, priority, show_modal })
       });
       applyData({ status, command, requires_ack, priority, show_modal });
-    } catch(e) { showToast('Send failed'); }
+    } catch(_) { showToast('Send failed'); }
   }
 
-  let toastTimer = null;
+  let toastT = null;
   function showToast(msg) {
     const el = document.getElementById('toast');
     el.textContent = msg; el.classList.add('show');
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+    if (toastT) clearTimeout(toastT);
+    toastT = setTimeout(() => el.classList.remove('show'), 2500);
   }
 
   if (sessionId && techAuthToken) joinSession();

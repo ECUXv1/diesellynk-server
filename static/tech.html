@@ -660,12 +660,12 @@
   function openRdp() {
     if (!currentRdpUrl && !sessionId) { showToast('Connect to a session first'); return; }
 
-    const sw     = window.screen.width;
-    const sh     = window.screen.height;
+    const sw     = window.screen.availWidth  || window.screen.width;
+    const sh     = window.screen.availHeight || window.screen.height;
     const sl     = window.screen.availLeft || 0;
     const st     = window.screen.availTop  || 0;
-    const cmdH   = Math.round(sh * 0.22);
-    const cmdTop = st + sh - cmdH;
+    const cmdH   = 220;              // fixed px — tall enough for big buttons + status strip
+    const cmdTop = st + sh - cmdH;   // snapped to bottom of available screen
 
     const cmdUrl = `${location.origin}/command-bar.html?session=${encodeURIComponent(sessionId)}&auth=${encodeURIComponent(techAuthToken)}&org=${encodeURIComponent(techOrgId)}&rdp=${encodeURIComponent(currentRdpUrl || '')}`;
 
