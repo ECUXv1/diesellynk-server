@@ -281,6 +281,17 @@
           </div>
         </div>
       </button>
+
+      <!-- Cancel request button — only visible after request sent -->
+      <button id="cancel-request-btn" onclick="cancelService()"
+        style="display:none;width:100%;margin-top:10px;padding:13px 20px;
+        border:1px solid rgba(255,107,107,.35);border-radius:12px;
+        background:rgba(192,57,43,.08);cursor:pointer;
+        font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;
+        letter-spacing:.12em;text-transform:uppercase;color:var(--danger);
+        transition:all .25s;">
+        ✕ Cancel Request
+      </button>
     </div>
 
     <!-- ── MANUAL TRUCK INFO ──────────────────────────────── -->
@@ -752,7 +763,8 @@
 
     function resetServiceButton() {
       serviceRequested = false;
-      const btn = document.getElementById('service-request-btn');
+      const btn    = document.getElementById('service-request-btn');
+      const cancel = document.getElementById('cancel-request-btn');
       btn.className = 'service-request-btn';
       btn.style.opacity = '1';
       btn.style.cursor = 'pointer';
@@ -764,12 +776,14 @@
             <span class="srv-btn-sub">Tap to connect with a DieselLynk technician</span>
           </div>
         </div>`;
+      if (cancel) cancel.style.display = 'none';
     }
 
     function markServiceSent() {
       if (serviceRequested) return;
       serviceRequested = true;
-      const btn = document.getElementById('service-request-btn');
+      const btn    = document.getElementById('service-request-btn');
+      const cancel = document.getElementById('cancel-request-btn');
       btn.className = 'service-request-btn sent';
       btn.style.opacity = '1';
       btn.style.cursor = 'default';
@@ -781,6 +795,21 @@
             <span class="srv-btn-sub">Connecting you to a technician — stand by</span>
           </div>
         </div>`;
+      if (cancel) cancel.style.display = 'block';
+    }
+
+    async function cancelService() {
+      if (!serviceRequested) return;
+      const cancel = document.getElementById('cancel-request-btn');
+      if (cancel) { cancel.style.opacity = '.5'; cancel.style.cursor = 'wait'; }
+      try {
+        await fetch(`/api/cancel-service/${encodeURIComponent(sessionId)}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ driver_token: driverToken })
+        });
+      } catch(e) {}
+      resetServiceButton();
     }
 
     // ── WEBSOCKET ─────────────────────────────────────────────
