@@ -110,11 +110,21 @@
 
 <div class="bar">
 
-  <!-- LEFT — session info -->
+  <!-- LEFT — session info + RDP launch -->
   <div class="bar-left">
     <div class="bl-session">SESSION</div>
     <div class="bl-sid" id="bl-sid">--</div>
     <div class="bl-ws"><span class="ws-dot" id="ws-dot"></span><span id="ws-label">Connecting</span></div>
+    <button id="rdp-launch-btn" onclick="launchRdp()"
+      style="display:none;margin-top:8px;align-items:center;justify-content:center;gap:6px;
+      padding:7px 10px;border-radius:6px;cursor:pointer;
+      background:linear-gradient(135deg,rgba(46,134,193,.3),rgba(46,134,193,.12));
+      border:1px solid rgba(46,134,193,.5);
+      font-family:'Orbitron',sans-serif;font-size:7px;font-weight:700;
+      letter-spacing:.1em;text-transform:uppercase;color:#5dade2;
+      transition:all .2s;width:100%;">
+       Connect RDP
+    </button>
   </div>
 
   <!-- CENTER — commands + status -->
@@ -170,13 +180,37 @@
 
 <script>
   // Read params from URL
-  const params       = new URLSearchParams(location.search);
-  const sessionId    = params.get('session') || '';
-  const techAuthToken= params.get('auth')    || '';
-  const techOrgId    = params.get('org')     || '';
+  const params        = new URLSearchParams(location.search);
+  const sessionId     = params.get('session') || '';
+  const techAuthToken = params.get('auth')    || '';
+  const techOrgId     = params.get('org')     || '';
+  const rdpUrl        = params.get('rdp')     || '';
 
   // Set session label
   document.getElementById('bl-sid').textContent = sessionId || '--';
+
+  // Wire up Connect RDP button
+  const rdpBtn = document.getElementById('rdp-launch-btn');
+  if (rdpUrl && rdpBtn) {
+    rdpBtn.style.display = 'flex';
+    rdpBtn.onclick = launchRdp;
+  }
+
+  let _rdpWin = null;
+  function launchRdp() {
+    if (!rdpUrl) { showToast('RDP URL not ready'); return; }
+    const sw   = window.screen.width;
+    const sh   = window.screen.height;
+    const sl   = window.screen.availLeft || 0;
+    const st   = window.screen.availTop  || 0;
+    const rdpH = Math.round(sh * 0.78);
+    if (!_rdpWin || _rdpWin.closed) {
+      _rdpWin = window.open(rdpUrl, 'dl_rdp_window',
+        `width=${sw},height=${rdpH},left=${sl},top=${st},toolbar=no,menubar=no,scrollbars=no,resizable=yes`);
+    } else {
+      _rdpWin.focus();
+    }
+  }
 
   if (!sessionId || !techAuthToken) {
     document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Orbitron,sans-serif;font-size:12px;color:#8A8A8A;">No session — open from tech panel</div>';

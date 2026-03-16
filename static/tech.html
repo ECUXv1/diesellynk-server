@@ -544,7 +544,7 @@
           <div class="a-cell"><div class="a-key">Customer Ack</div><div class="a-val" style="color:${d.customer_ack ? 'var(--ack-yes)' : 'var(--ack-no)'};">${d.customer_ack ? 'CONFIRMED' : 'PENDING'}</div></div>
         </div>
         <div class="a-actions">
-          ${currentRdpUrl ? `<button class="a-btn a-btn-rdp" onclick="openRdp()"> Open RDP</button>` : ''}
+          ${currentRdpUrl ? `<button class="a-btn a-btn-rdp" onclick="openRdp()"> Open Command Bar</button>` : ''}
           <button class="a-btn a-btn-driver" onclick="copyDriverLink('${sessionId}')"> Driver Link</button>
           <button class="a-btn a-btn-disc" onclick="disconnectSession()">Disconnect</button>
         </div>
@@ -654,19 +654,35 @@
   }
 
   // ── OPEN RDP ──────────────────────────────────────────────────
+  // Stored window reference
+  let _cmdWin = null;
+
   function openRdp() {
-    if (!currentRdpUrl) { showToast('RDP not ready — wait for service request'); return; }
-    const sw = window.screen.width;
-    const sh = window.screen.height;
-    const sl = window.screen.availLeft || 0;
-    const st = window.screen.availTop  || 0;
-    const rdpH = Math.round(sh * 0.80);
-    const cmdH = sh - rdpH;
-    window.open(currentRdpUrl, 'dl_rdp_window',
-      `width=${sw},height=${rdpH},left=${sl},top=${st},toolbar=no,menubar=no,scrollbars=no,resizable=yes`);
-    const cmdUrl = `${location.origin}/command-bar.html?session=${encodeURIComponent(sessionId)}&auth=${encodeURIComponent(techAuthToken)}&org=${encodeURIComponent(techOrgId)}`;
-    window.open(cmdUrl, 'dl_cmd_bar',
-      `width=${sw},height=${cmdH},left=${sl},top=${st + rdpH},toolbar=no,menubar=no,scrollbars=no,resizable=no`);
+    if (!currentRdpUrl && !sessionId) { showToast('Connect to a session first'); return; }
+
+    const sw     = window.screen.width;
+    const sh     = window.screen.height;
+    const sl     = window.screen.availLeft || 0;
+    const st     = window.screen.availTop  || 0;
+    const cmdH   = Math.round(sh * 0.22);
+    const cmdTop = st + sh - cmdH;
+
+    const cmdUrl = `${location.origin}/command-bar.html?session=${encodeURIComponent(sessionId)}&auth=${encodeURIComponent(techAuthToken)}&org=${encodeURIComponent(techOrgId)}&rdp=${encodeURIComponent(currentRdpUrl || '')}`;
+
+    // Single window.open — direct user gesture, never blocked
+    if (!_cmdWin || _cmdWin.closed) {
+      _cmdWin = window.open(cmdUrl, 'dl_cmd_bar',
+        `width=${sw},height=${cmdH},left=${sl},top=${cmdTop},toolbar=no,menubar=no,scrollbars=no,resizable=no`);
+    } else {
+      // Already open — update its URL with latest rdp URL and refocus
+      _cmdWin.location.href = cmdUrl;
+      _cmdWin.focus();
+    }
+
+    if (!_cmdWin || _cmdWin.closed) {
+      // Still blocked — last resort toast
+      showToast('Popup blocked — allow popups for this site and try again');
+    }
   }
 
   // ── COPY DRIVER LINK ─────────────────────────────────────────
